@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My HEX Valuation</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- jQuery library -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <!-- Popper JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.5.3/dist/web3.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bignumber.js/9.0.1/bignumber.min.js"></script>
+
+
+    <script src="hex-abi.js"></script>
+    <!-- Custom CSS for dark theme -->
+    <style>
+        body {
+            background-color: #343a40;
+            color: #fff;
+        }
+    </style>
+    <style>
+        .hex-balance-container {
+            background: linear-gradient(to bottom right, #005D8F, #00BFFF);
+            border-radius: 8px;
+            padding: 16px;
+            display: inline-block;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hex-balance-container::before {
+            content: "";
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 80%);
+            animation: ripple 3s ease-in-out infinite; /* Updated animation */
+            opacity: 0.4;
+        }
+        
+        .hex-balance {
+            font-size: 24px;
+            margin: 0;
+            color: #fff;
+        }
+        
+        @keyframes ripple {
+            0% {
+            transform: scale(1);
+            }
+            50% {
+            transform: scale(2);
+            }
+            100% {
+            transform: scale(1);
+            }
+        }
+
+        .hex-stake-table {
+            width: 100%;
+            border-collapse: collapse;
+            color: #ffffff;
+        }
+
+        .hex-stake-table th,
+        .hex-stake-table td {
+            border: 1px solid #ffffff;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .hex-stake-table th {
+            background-color: #005D8F;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <a class="navbar-brand" href="#">Hex Miner App</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item active">
+                    <a class="nav-link" href="#">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="settings.html">Settings</a>
+                </li>
+                
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="hex-price-container">
+            <p class="hex-price"></p>
+           
+        </div>
+    
+        <div class="hex-balance-container">
+            <p class="hex-value"></p>
+            <p class="hex-balance">Loading...</p>
+        </div>
+    
+        <table class="hex-stake-table">
+            <thead>
+                <tr>
+                    <th>Stake Index</th>
+                    <th>Principal</th>
+                    <th>Interest</th>
+                    <th>BigPayDay</th>
+                </tr>
+            </thead>
+            <tbody id="hexStakesTbody">
+            </tbody>
+        </table>
+        
+    </div>
+
+    <script>
+        const ethAddress = localStorage.getItem('ethAddress');
+        const infuraAPIKey = localStorage.getItem('InfuraAPIKey');
+
+        if (!ethAddress) {
+            document.querySelector('.container').innerHTML = `
+                <div class="alert alert-warning">
+                    Please set your Ethereum address in the <a href="settings.html">Settings</a> page.
+                </div>
+            `;
+        } else {
+            // Continue with the next steps
+        }
+
+        if (typeof web3 !== 'undefined') {
+            web3 = new Web3(web3.currentProvider);
+        } else {
+            web3 = new Web3(new Web3.providers.HttpProvider(`https://mainnet.infura.io/v3/` + infuraAPIKey));
+        }
+
+
+        const hexContractAddress = '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39';
+        const hexContractABI = HEX_CONTRACT_ABI;
+
+        const hexContract = new web3.eth.Contract(hexContractABI, hexContractAddress);
+
+        async function updateHexData() {
+            const [balance, priceData] = await Promise.all([
+                hexContract.methods.balanceOf(ethAddress).call(),
+                fetch('https://api.coingecko.com/api/v3/simple/price?ids=hex&vs_currencies=usd&include_24hr_change=true').then(response => response.json())
+            ]);
+
+            const hexBalance = balance / (10 ** 8);
+            const hexPrice = priceData.hex.usd;
+            const hexChange = priceData.hex.usd_24h_change;
+            const hexValue = hexPrice * hexBalance;
+
+            const formattedHexBalance = hexBalance.toLocaleString('en');
+            const hexPriceText = `Hex Price: $${hexPrice.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD (${hexChange.toFixed(2)}%)`;
+            const hexValueText = `$${hexValue.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD`;
+
+            const hexPriceContainer = document.querySelector('.hex-price-container');
+            hexPriceContainer.innerHTML = `
+                <p class="hex-price">${hexPriceText}</p>
+                
+            `;
+
+            const hexBalanceContainer = document.querySelector('.hex-balance-container');
+            hexBalanceContainer.innerHTML = `
+                <p class="hex-value">${hexValueText}</p>
+                <p>${formattedHexBalance} HEX</p>
+            `;
+
+            return hexValue;
+        }
+
+        updateHexData().catch(error => console.error(error));
+
+        async function getActiveHexStakes(address) {
+            const stakeCount = await hexContract.methods.stakeCount(address).call();
+            const activeStakes = [];
+
+            for (let i = 0; i < stakeCount; i++) {
+                const stake = await hexContract.methods.stakeLists(address, i).call();
+                if (stake.stakeId !== '0') {
+                    const currentDay = await hexContract.methods.currentDay().call();
+                    const stakingDays = Math.min(currentDay - stake.lockedDay, stake.stakedDays);
+
+                    let payout = 0;
+                    //let bigPayDayBonus = 0;
+
+                    const dailyDataList = await hexContract.methods.dailyDataRange(stake.lockedDay, currentDay).call();
+
+                    dailyDataList.forEach(dailyDataPacked => {
+                        const dailyDataBigInt = BigInt(dailyDataPacked);
+                        const dayStakeSharesTotal = (dailyDataBigInt >> 72n) & ((1n << 72n) - 1n);
+                        const dayPayoutTotal = dailyDataBigInt & ((1n << 72n) - 1n);
+                        const scale = 1n * (10n ** 12n); // A large number to preserve precision
+                        const payoutPerTShare = (dayPayoutTotal * (1n ** 6n) * scale) / dayStakeSharesTotal;
+
+                        const actualPayoutPerTShare = Number(payoutPerTShare) / Number(scale);
+
+                        payout += Number(BigInt(stake.stakeShares) * BigInt(Math.round(actualPayoutPerTShare * (10 ** 12))) / (10n ** 20n));
+                    });
+
+                    // Get the big pay day bonus for the stake
+                    const globals = await hexContract.methods.globals().call();
+                    const unclaimedSatoshisTotal = globals._unclaimedSatoshisTotal;
+                    const heartsPerSatoshi = globals._heartsPerShare;
+
+                    const BIG_PAY_DAY = 350;
+
+                    
+
+                    const stakeInfo = {
+                        index: i,
+                        principal: stake.stakedHearts / (10 ** 8),
+                        payout: payout.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                        
+                    };
+                    activeStakes.push(stakeInfo);
+                }
+            }
+
+            return activeStakes;
+        }
+
+
+
+
+
+
+
+
+        async function displayActiveHexStakes() {
+            const stakes = await getActiveHexStakes(ethAddress);
+
+            const hexStakesTbody = document.getElementById('hexStakesTbody');
+            hexStakesTbody.innerHTML = '';
+
+            for (const stake of stakes) {
+                const row = document.createElement('tr');
+
+                const indexCell = document.createElement('td');
+                indexCell.textContent = stake.index;
+                row.appendChild(indexCell);
+
+                const principalCell = document.createElement('td');
+                principalCell.textContent = stake.principal.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                row.appendChild(principalCell);
+
+                const interestCell = document.createElement('td');
+                interestCell.textContent = stake.payout.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                row.appendChild(interestCell);
+
+                
+
+                hexStakesTbody.appendChild(row);
+            }
+        }
+
+
+
+        displayActiveHexStakes();
+
+    </script>
+</body>
+</html>
