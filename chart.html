@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HEX Price Chart</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    
+    <!-- Custom CSS for dark theme -->
+    <style>
+        body {
+            background-color: #343a40;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <a class="navbar-brand" href="#">Hex Miner App</a>
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="chart.html">Chart</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="Settings.html">Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+    </header>
+    <main>
+        <div class="container mt-4">
+            <div class="btn-group mt-2 mb-2" role="group">
+                <button type="button" class="btn btn-outline-light" onclick="changeFontSize(12)">Small</button>
+                <button type="button" class="btn btn-outline-light" onclick="changeFontSize(16)">Medium</button>
+                <button type="button" class="btn btn-outline-light" onclick="changeFontSize(20)">Large</button>
+              </div>
+              
+            <canvas id="hexPriceChart"></canvas>
+        </div>
+    </main>
+    <footer>
+        <!-- Your footer content goes here -->
+    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1"></script>
+
+    <script>
+        async function fetchHexPriceData() {
+            const response = await fetch('https://api.coingecko.com/api/v3/coins/hex/market_chart?vs_currency=usd&days=30&interval=daily');
+            const data = await response.json();
+            return data.prices.map(priceData => ({ timestamp: priceData[0], price: priceData[1] }));
+        }
+    
+        let hexPriceChart;
+    
+        function changeFontSize(fontSize) {
+            hexPriceChart.options.scales.x.ticks.font.size = fontSize;
+            hexPriceChart.options.scales.y.ticks.font.size = fontSize;
+            hexPriceChart.options.plugins.legend.labels.font.size = fontSize;
+            hexPriceChart.update();
+        }
+    
+        (async function() {
+            const hexPriceData = await fetchHexPriceData();
+            const chartData = {
+                labels: hexPriceData.map(data => new Date(data.timestamp).toLocaleDateString()),
+                datasets: [{
+                    label: 'HEX Price',
+                    data: hexPriceData.map(data => data.price),
+                    borderColor: '#ffc107',
+                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                    pointBorderColor: '#ffc107',
+                    pointBackgroundColor: '#343a40',
+                }]
+            };
+    
+            const chartOptions = {
+                scales: {
+                    x: {
+                        ticks: {
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            beginAtZero: true,
+                            font: {
+                                size: 12
+                            },
+                            callback: function(value) {
+                                return '$' + value.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            };
+    
+            const ctx = document.getElementById('hexPriceChart').getContext('2d');
+            hexPriceChart = new Chart(ctx, {
+                type: 'line',
+                data: chartData,
+                options: chartOptions
+            });
+        })();
+    </script>
+        
+    
+    
+</body>
+</html>
+
