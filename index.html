@@ -293,9 +293,7 @@
             
 
             for (const stake of stakes) {
-                totalHex += parseFloat(stake.principal) + parseFloat(stake.payout) + parseFloat(stake.bigPayDay);
-                totalHexValue = totalHex * hexPrice;
-
+                
                 const tile = document.createElement('div');
                 tile.className = 'stake-tile';
 
@@ -316,6 +314,9 @@
                 tile.appendChild(bigPayDay);
 
                 hexStakesContainer.appendChild(tile);
+                
+                totalHex += parseFloat(stake.principal) + parseFloat(stake.payout) + parseFloat(stake.bigPayDay);
+                totalHexValue += totalHex * hexPrice;
 
                 //totalValue += parseFloat(stake.payout) + parseFloat(stake.bigPayDay) + stake.principal;
             }
