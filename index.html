@@ -28,7 +28,7 @@
     </style>
     <style>
         .hex-balance-container {
-            background: linear-gradient(to bottom right, #005D8F, #00BFFF);
+            background: linear-gradient(to bottom right, #533601, #946102);
             border-radius: 8px;
             padding: 16px;
             display: inline-block;
@@ -175,8 +175,8 @@
         const hexContractAddress = '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39';
         const hexContractABI = HEX_CONTRACT_ABI;
         
-        let totalHex = 0;
-        let totalHexValue = 0;
+        let totalHex = 0.0;
+        let totalHexValue = 0.0;
 
         const hexContract = new web3.eth.Contract(hexContractABI, hexContractAddress);
 
@@ -191,8 +191,11 @@
             const hexChange = priceData.hex.usd_24h_change;
             const hexValue = hexPrice * hexBalance;
 
-            totalHex += hexBalance;
-            totalHexValue += totalHex * hexPrice;
+            totalHex += parseFloat(hexBalance);
+            totalHexValue += parseFloat(parseFloat(totalHex) * parseFloat(hexPrice));
+
+            console.warn('totalHex:', totalHex);
+            console.warn('totalHexValue:', totalHexValue);
 
             const formattedHexBalance = hexBalance.toLocaleString('en');
             const hexPriceText = `Hex Price: $${hexPrice.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD (${hexChange.toFixed(2)}%)`;
@@ -266,7 +269,8 @@
                         bigPayDayBonus = bigPaySlice / (10**9); // + _calcAdoptionBonus(globals, bigPaySlice);
                         
                     }
-
+                    
+                    
                     const stakeInfo = {
                         index: i,
                         principal: stake.stakedHearts / (10 ** 8),
@@ -274,6 +278,18 @@
                         bigPayDay: bigPayDayBonus.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                     };
                     activeStakes.push(stakeInfo);
+
+                    
+                    console.warn('s.Principal:', parseFloat(stake.stakedHearts / (10 ** 8)));
+                    console.warn('s.payout:', parseFloat(payout));
+                    console.warn('s.bigPayDay:', parseFloat(bigPayDayBonus));
+
+                    totalHex += parseFloat(stake.stakedHearts / (10 ** 8)) + parseFloat(payout) + parseFloat(bigPayDayBonus);
+                   
+
+                    console.warn('totalHex:', totalHex);
+
+                    
                 }
             }
 
@@ -314,12 +330,14 @@
                 tile.appendChild(bigPayDay);
 
                 hexStakesContainer.appendChild(tile);
-                
-                totalHex += parseFloat(stake.principal) + parseFloat(stake.payout) + parseFloat(stake.bigPayDay);
-                totalHexValue += totalHex * hexPrice;
+
 
                 //totalValue += parseFloat(stake.payout) + parseFloat(stake.bigPayDay) + stake.principal;
             }
+            
+            totalHexValue += totalHex * hexPrice;
+            console.warn('totalHexValue:', totalHexValue);
+            
             const hexTotalAmountElement = document.getElementById('hexTotalAmount');
             hexTotalAmountElement.textContent = totalHex.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
