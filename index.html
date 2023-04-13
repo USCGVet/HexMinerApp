@@ -300,7 +300,7 @@
 
         async function displayActiveHexStakes(hexPrice) {
             const stakes = await getActiveHexStakes(ethAddress);
-            const hexTotalValueElement = document.getElementById('hexTotalValue');
+            
 
             //let totalValue = 0;
             const hexStakesContainer = document.getElementById('hexStakesContainer');
@@ -334,12 +334,14 @@
 
             }
             
-            totalHexValue += totalHex * hexPrice;
+            totalHexValue = totalHex * hexPrice;
             console.warn('totalHexValue:', totalHexValue);
             
-            const hexTotalAmountElement = document.getElementById('hexTotalAmount');
-            hexTotalAmountElement.textContent = totalHex.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+            const hexTotalAmountElement = document.getElementById('hexTotalAmount');
+            const hexTotalValueElement = document.getElementById('hexTotalValue');
+
+            hexTotalAmountElement.textContent = totalHex.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             hexTotalValueElement.textContent = totalHexValue.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
