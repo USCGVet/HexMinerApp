@@ -199,7 +199,7 @@
                     const stakingDays = Math.min(currentDay - stake.lockedDay, stake.stakedDays);
 
                     let payout = 0;
-                    //let bigPayDayBonus = 0;
+                    let bigPayDayBonus = 0;                    
 
                     const dailyDataList = await hexContract.methods.dailyDataRange(stake.lockedDay, currentDay).call();
 
@@ -217,18 +217,25 @@
 
                     // Get the big pay day bonus for the stake
                     const globals = await hexContract.methods.globals().call();
-                    const unclaimedSatoshisTotal = globals._unclaimedSatoshisTotal;
-                    const heartsPerSatoshi = globals._heartsPerShare;
-
+                    const unclaimedSatoshisTotal = 5700000000;  // this is an estimate.  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  I need exact amount...
+                    const heartsPerSatoshi = 10 ** 10; // This is a constant in the Hex contract
+                    const stakeSharesParam = stake.stakeShares; // This is the number of stake shares for the stake
                     const BIG_PAY_DAY = 350;
 
-                    
+                    const dailyData = await hexContract.methods.dailyData(BIG_PAY_DAY).call();
+                    const dayStakeSharesTotal = dailyData.dayStakeSharesTotal; // This is the total number of stake shares for the entire day of the big pay day
+
+                    if (stake.lockedDay <= BIG_PAY_DAY && currentDay > BIG_PAY_DAY) {
+                        const bigPaySlice = unclaimedSatoshisTotal * heartsPerSatoshi * stakeSharesParam / dayStakeSharesTotal;
+                        bigPayDayBonus = bigPaySlice / (10**9); // + _calcAdoptionBonus(globals, bigPaySlice);
+                        
+                    }
 
                     const stakeInfo = {
                         index: i,
                         principal: stake.stakedHearts / (10 ** 8),
                         payout: payout.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-                        
+                        bigPayDay: bigPayDayBonus.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                     };
                     activeStakes.push(stakeInfo);
                 }
@@ -236,6 +243,7 @@
 
             return activeStakes;
         }
+
 
 
 
@@ -265,7 +273,10 @@
                 interestCell.textContent = stake.payout.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 row.appendChild(interestCell);
 
-                
+                const bigPayDayCell = document.createElement('td');
+                bigPayDayCell.textContent = stake.bigPayDay.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // new column
+                row.appendChild(bigPayDayCell); // new column
+
 
                 hexStakesTbody.appendChild(row);
             }
