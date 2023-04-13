@@ -83,6 +83,33 @@
         .hex-stake-table th {
             background-color: #005D8F;
         }
+
+        .stake-container {
+            display: flex;
+            flex-wrap: wrap;
+            margin: -8px;
+            flex-direction: column;
+        }
+
+        .stake-tile {
+            background-color: #005D8F;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 8px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 400px; /* You can adjust this value to set the max width of the stake tiles */
+        }
+
+        .stake-tile > p {
+            margin: 0;
+            margin-bottom: 4px;
+        }
+
+        .stake-total-value {
+            font-size: 24px;
+            margin-bottom: 16px;
+        }
     </style>
 </head>
 <body>
@@ -107,26 +134,20 @@
     <div class="container mt-4">
         <div class="hex-price-container">
             <p class="hex-price"></p>
-           
+            <p class="hex-total-amount">Total HEX: <span id="hexTotalAmount">Loading...</span></p>
+            <p class="hex-total-value">Total HEX Value: $<span id="hexTotalValue">Loading...</span> USD</p>
+
+
         </div>
     
         <div class="hex-balance-container">
+            Wallet Balance:
             <p class="hex-value"></p>
             <p class="hex-balance">Loading...</p>
         </div>
-    
-        <table class="hex-stake-table">
-            <thead>
-                <tr>
-                    <th>Stake Index</th>
-                    <th>Principal</th>
-                    <th>Interest</th>
-                    <th>BigPayDay</th>
-                </tr>
-            </thead>
-            <tbody id="hexStakesTbody">
-            </tbody>
-        </table>
+        <br>
+        <br>
+        <div class="stake-container" id="hexStakesContainer"></div>
         
     </div>
 
@@ -153,6 +174,9 @@
 
         const hexContractAddress = '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39';
         const hexContractABI = HEX_CONTRACT_ABI;
+        
+        let totalHex = 0;
+        let totalHexValue = 0;
 
         const hexContract = new web3.eth.Contract(hexContractABI, hexContractAddress);
 
@@ -167,26 +191,38 @@
             const hexChange = priceData.hex.usd_24h_change;
             const hexValue = hexPrice * hexBalance;
 
+            totalHex += hexBalance;
+            totalHexValue += totalHex * hexPrice;
+
             const formattedHexBalance = hexBalance.toLocaleString('en');
             const hexPriceText = `Hex Price: $${hexPrice.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD (${hexChange.toFixed(2)}%)`;
             const hexValueText = `$${hexValue.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD`;
 
             const hexPriceContainer = document.querySelector('.hex-price-container');
             hexPriceContainer.innerHTML = `
-                <p class="hex-price">${hexPriceText}</p>
-                
+                <p class="hex-price">${hexPriceText}</p>               
+                <p class="hex-total-value">Total HEX Value: $<span id="hexTotalValue">Loading...</span> USD                    
+                <p class="hex-total-amount">Total HEX: <span id="hexTotalAmount">Loading...</span></p>
             `;
 
             const hexBalanceContainer = document.querySelector('.hex-balance-container');
             hexBalanceContainer.innerHTML = `
+                Wallet Balance:
                 <p class="hex-value">${hexValueText}</p>
                 <p>${formattedHexBalance} HEX</p>
             `;
 
+            // Call displayActiveHexStakes() with the hexPrice argument
+            displayActiveHexStakes(hexPrice).catch(error => {
+                console.error('Error in displayActiveHexStakes:', error);
+            });
+
             return hexValue;
         }
 
-        updateHexData().catch(error => console.error(error));
+        updateHexData().catch(error => {
+            console.error('Error in updateHexData:', error);
+        });
 
         async function getActiveHexStakes(address) {
             const stakeCount = await hexContract.methods.stakeCount(address).call();
@@ -246,45 +282,48 @@
 
 
 
-
-
-
-
-
-
-        async function displayActiveHexStakes() {
+        async function displayActiveHexStakes(hexPrice) {
             const stakes = await getActiveHexStakes(ethAddress);
+            const hexTotalValueElement = document.getElementById('hexTotalValue');
 
-            const hexStakesTbody = document.getElementById('hexStakesTbody');
-            hexStakesTbody.innerHTML = '';
+            //let totalValue = 0;
+            const hexStakesContainer = document.getElementById('hexStakesContainer');
+            hexStakesContainer.innerHTML = '';
+
+            
 
             for (const stake of stakes) {
-                const row = document.createElement('tr');
+                totalHex += parseFloat(stake.principal) + parseFloat(stake.payout) + parseFloat(stake.bigPayDay);
+                totalHexValue = totalHex * hexPrice;
 
-                const indexCell = document.createElement('td');
-                indexCell.textContent = stake.index;
-                row.appendChild(indexCell);
+                const tile = document.createElement('div');
+                tile.className = 'stake-tile';
 
-                const principalCell = document.createElement('td');
-                principalCell.textContent = stake.principal.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                row.appendChild(principalCell);
+                const index = document.createElement('p');
+                index.textContent = `Stake Index: ${stake.index}`;
+                tile.appendChild(index);
 
-                const interestCell = document.createElement('td');
-                interestCell.textContent = stake.payout.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                row.appendChild(interestCell);
+                const principal = document.createElement('p');
+                principal.textContent = `Principal: ${stake.principal.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HEX`;
+                tile.appendChild(principal);
 
-                const bigPayDayCell = document.createElement('td');
-                bigPayDayCell.textContent = stake.bigPayDay.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // new column
-                row.appendChild(bigPayDayCell); // new column
+                const interest = document.createElement('p');
+                interest.textContent = `Interest: ${stake.payout} HEX`;
+                tile.appendChild(interest);
 
+                const bigPayDay = document.createElement('p');
+                bigPayDay.textContent = `BigPayDay: ${stake.bigPayDay} HEX`;
+                tile.appendChild(bigPayDay);
 
-                hexStakesTbody.appendChild(row);
+                hexStakesContainer.appendChild(tile);
+
+                //totalValue += parseFloat(stake.payout) + parseFloat(stake.bigPayDay) + stake.principal;
             }
+            const hexTotalAmountElement = document.getElementById('hexTotalAmount');
+            hexTotalAmountElement.textContent = totalHex.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            hexTotalValueElement.textContent = totalHexValue.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
-
-
-
-        displayActiveHexStakes();
 
     </script>
 </body>
