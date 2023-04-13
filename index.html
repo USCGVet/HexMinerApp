@@ -198,7 +198,7 @@
             console.warn('totalHexValue:', totalHexValue);
 
             const formattedHexBalance = hexBalance.toLocaleString('en');
-            const hexPriceText = `Hex Price: $${hexPrice.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD (${hexChange.toFixed(2)}%)`;
+            const hexPriceText = `Hex Price: $${hexPrice.toLocaleString('en', {minimumFractionDigits: 6, maximumFractionDigits: 8})} USD (${hexChange.toFixed(2)}%)`;
             const hexValueText = `$${hexValue.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD`;
 
             const hexPriceContainer = document.querySelector('.hex-price-container');
@@ -324,15 +324,14 @@
                 const interest = document.createElement('p');
                 interest.textContent = `Interest: ${stake.payout} HEX`;
                 tile.appendChild(interest);
-
+                                
                 const bigPayDay = document.createElement('p');
                 bigPayDay.textContent = `BigPayDay: ${stake.bigPayDay} HEX`;
                 tile.appendChild(bigPayDay);
+            
 
                 hexStakesContainer.appendChild(tile);
 
-
-                //totalValue += parseFloat(stake.payout) + parseFloat(stake.bigPayDay) + stake.principal;
             }
             
             totalHexValue += totalHex * hexPrice;
