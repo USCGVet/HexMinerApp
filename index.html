@@ -91,6 +91,9 @@
         }
 
         .stake-tile {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             background-color: #005D8F;
             border-radius: 8px;
             padding: 16px;
@@ -110,6 +113,37 @@
             margin-bottom: 16px;
         }
     </style>
+    <style>
+        .stake-tile {
+            position: relative;
+        }
+    
+        .progress-ring {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 50px;
+            height: 50px;
+        }
+    
+        .progress-ring__circle {
+            transition: 0.35s stroke-dashoffset;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+    </style>
+    <style>
+        .progress-percentage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+        }
+    </style>
+    
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -151,6 +185,8 @@
         <br>
         <div class="stake-container" id="hexStakesContainer"></div>
         
+
+
     </div>
 
     <script>
@@ -278,7 +314,9 @@
                         index: i,
                         principal: stake.stakedHearts / (10 ** 8),
                         payout: payout.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-                        bigPayDay: bigPayDayBonus.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        bigPayDay: bigPayDayBonus.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                        startDay: stake.lockedDay,
+                        endDay: parseInt(stake.lockedDay) + parseInt(stake.stakedDays)
                     };
                     activeStakes.push(stakeInfo);
 
@@ -321,34 +359,68 @@
                 const tile = document.createElement('div');
                 tile.className = 'stake-tile';
 
+                const stakeInfo = document.createElement('div');
+                tile.appendChild(stakeInfo);
+
                 const index = document.createElement('p');
                 index.textContent = `Stake Index: ${stake.index}`;
-                tile.appendChild(index);
+                stakeInfo.appendChild(index);
 
                 const principal = document.createElement('p');
                 principal.innerHTML = `Principal: ${stake.principal.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HEX <span style="font-size: 0.8em;">(${formatUsdValue(stake.principal * hexPrice)})</span>`;
-                tile.appendChild(principal);
+                stakeInfo.appendChild(principal);
 
                 const interest = document.createElement('p');
                 interest.innerHTML = `Interest: ${stake.payout} HEX <span style="font-size: 0.8em;">(${formatUsdValue(parseFloat(stake.payout.replace(/,/g, '')) * hexPrice)})</span>`;
-                tile.appendChild(interest);
+                stakeInfo.appendChild(interest);
 
                 const bigPayDay = document.createElement('p');
                 bigPayDay.innerHTML = `BigPayDay: ${stake.bigPayDay} HEX <span style="font-size: 0.8em;">(${formatUsdValue(parseFloat(stake.bigPayDay.replace(/,/g, '')) * hexPrice)})</span>`;
-                tile.appendChild(bigPayDay);
+                stakeInfo.appendChild(bigPayDay);
+                
+                const progressRing = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                progressRing.className = "progress-ring";
+                progressRing.setAttribute("width", "50");
+                progressRing.setAttribute("height", "50");
 
+                const progressCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                progressCircle.className = "progress-ring__circle";
+                progressCircle.setAttribute("stroke", "#946102"); // Updated color to gold
+                progressCircle.setAttribute("stroke-width", "5");
+                progressCircle.setAttribute("fill", "transparent");
+                progressCircle.setAttribute("r", "24"); // Increased radius to 24 for a larger circle
+                progressCircle.setAttribute("cx", "25");
+                progressCircle.setAttribute("cy", "25");
+
+                const circumference = 2 * Math.PI * progressCircle.getAttribute("r");
+
+                const currentDay = await hexContract.methods.currentDay().call();
+                const progress = (currentDay - stake.startDay) / (stake.endDay - stake.startDay);
+                const dashoffset = circumference * (1 - progress);
+
+                progressCircle.setAttribute("stroke-dasharray", `${circumference} ${circumference}`);
+                progressCircle.setAttribute("stroke-dashoffset", dashoffset);
+
+                progressRing.appendChild(progressCircle);
+
+                const progressPercentage = document.createElementNS("http://www.w3.org/2000/svg", 'text');
+                progressPercentage.setAttribute('x', '50%');
+                progressPercentage.setAttribute('y', '50%');
+                progressPercentage.setAttribute('text-anchor', 'middle');
+                progressPercentage.setAttribute('dy', '.3em');
+                progressPercentage.setAttribute('fill', 'white');
+
+                
+
+                progressPercentage.textContent = `${Math.round(progress * 100)}%`;
+                progressRing.appendChild(progressPercentage);
+
+                tile.appendChild(progressRing);
                 hexStakesContainer.appendChild(tile);
             }
-
-            totalHexValue = totalHex * hexPrice;
-            console.log('totalHexValue:', totalHexValue);
-
-            const hexTotalAmountElement = document.getElementById('hexTotalAmount');
-            const hexTotalValueElement = document.getElementById('hexTotalValue');
-
-            hexTotalAmountElement.textContent = totalHex.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            hexTotalValueElement.textContent = totalHexValue.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
+
+
 
     </script>
 </body>
