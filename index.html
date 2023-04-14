@@ -363,19 +363,19 @@
                 tile.appendChild(stakeInfo);
 
                 const index = document.createElement('p');
-                index.textContent = `Stake Index: ${stake.index}`;
+                index.textContent = `#: ${stake.index}`;
                 stakeInfo.appendChild(index);
 
                 const principal = document.createElement('p');
-                principal.innerHTML = `Principal: ${stake.principal.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HEX <span style="font-size: 0.8em;">(${formatUsdValue(stake.principal * hexPrice)})</span>`;
+                principal.innerHTML = `Pri: ${stake.principal.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HEX <span style="font-size: 0.8em;">(${formatUsdValue(stake.principal * hexPrice)})</span>`;
                 stakeInfo.appendChild(principal);
 
                 const interest = document.createElement('p');
-                interest.innerHTML = `Interest: ${stake.payout} HEX <span style="font-size: 0.8em;">(${formatUsdValue(parseFloat(stake.payout.replace(/,/g, '')) * hexPrice)})</span>`;
+                interest.innerHTML = `Int: ${stake.payout} HEX <span style="font-size: 0.8em;">(${formatUsdValue(parseFloat(stake.payout.replace(/,/g, '')) * hexPrice)})</span>`;
                 stakeInfo.appendChild(interest);
 
                 const bigPayDay = document.createElement('p');
-                bigPayDay.innerHTML = `BigPayDay: ${stake.bigPayDay} HEX <span style="font-size: 0.8em;">(${formatUsdValue(parseFloat(stake.bigPayDay.replace(/,/g, '')) * hexPrice)})</span>`;
+                bigPayDay.innerHTML = `BPD: ${stake.bigPayDay} HEX <span style="font-size: 0.8em;">(${formatUsdValue(parseFloat(stake.bigPayDay.replace(/,/g, '')) * hexPrice)})</span>`;
                 stakeInfo.appendChild(bigPayDay);
                 
                 const progressRing = document.createElementNS("http://www.w3.org/2000/svg", "svg");
