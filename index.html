@@ -283,14 +283,14 @@
                     activeStakes.push(stakeInfo);
 
                     
-                    console.warn('s.Principal:', parseFloat(stake.stakedHearts / (10 ** 8)));
-                    console.warn('s.payout:', parseFloat(payout));
-                    console.warn('s.bigPayDay:', parseFloat(bigPayDayBonus));
+                    console.log('s.Principal:', parseFloat(stake.stakedHearts / (10 ** 8)));
+                    console.log('s.payout:', parseFloat(payout));
+                    console.log('s.bigPayDay:', parseFloat(bigPayDayBonus));
 
                     totalHex += parseFloat(stake.stakedHearts / (10 ** 8)) + parseFloat(payout) + parseFloat(bigPayDayBonus);
                    
 
-                    console.warn('totalHex:', totalHex);
+                    console.log('totalHex:', totalHex);
 
                     
                 }
@@ -338,7 +338,7 @@
             }
             
             totalHexValue = totalHex * hexPrice;
-            console.warn('totalHexValue:', totalHexValue);
+            console.log('totalHexValue:', totalHexValue);
             
 
             const hexTotalAmountElement = document.getElementById('hexTotalAmount');
