@@ -15,7 +15,22 @@
             background-color: #343a40;
             color: #fff;
         }
+        #hexPriceChart {
+           height: 100vh;
+        }
     </style>
+    <style>
+        .chart-container {
+          height: calc(100vh - 56px); /* subtract navbar height */
+          padding: 1rem;
+          box-sizing: border-box;
+        }
+        #hexPriceChart {
+          height: 100%;
+          width: 100%;
+        }
+      </style> 
+      
 </head>
 <body>
     <header>
@@ -40,15 +55,17 @@
         </nav>
     </header>
     <main>
-        <div class="container mt-4">
+        <div class="chart-container">
             <div class="btn-group mt-2 mb-2" role="group">
                 <button type="button" class="btn btn-outline-light" onclick="changeFontSize(12)">Small</button>
                 <button type="button" class="btn btn-outline-light" onclick="changeFontSize(16)">Medium</button>
                 <button type="button" class="btn btn-outline-light" onclick="changeFontSize(20)">Large</button>
-              </div>
+            </div>
+            <canvas id="hexPriceChart" style="height: 80vh;"></canvas>
               
-            <canvas id="hexPriceChart"></canvas>
         </div>
+        
+
     </main>
     <footer>
         <!-- Your footer content goes here -->
@@ -61,17 +78,18 @@
             const data = await response.json();
             return data.prices.map(priceData => ({ timestamp: priceData[0], price: priceData[1] }));
         }
-    
-        let hexPriceChart;
-    
-        function changeFontSize(fontSize) {
-            hexPriceChart.options.scales.x.ticks.font.size = fontSize;
-            hexPriceChart.options.scales.y.ticks.font.size = fontSize;
-            hexPriceChart.options.plugins.legend.labels.font.size = fontSize;
-            hexPriceChart.update();
+      
+        function resizeChart() {
+            const canvas = document.getElementById("hexPriceChart");
+            const navbarHeight = document.querySelector("nav").offsetHeight;
+            const windowHeight = window.innerHeight;
+            const chartHeight = windowHeight - navbarHeight;
+            canvas.style.height = chartHeight + "px !important";
         }
-    
-        (async function() {
+      
+        let hexPriceChart;
+      
+        async function initializeChart() {
             const hexPriceData = await fetchHexPriceData();
             const chartData = {
                 labels: hexPriceData.map(data => new Date(data.timestamp).toLocaleDateString()),
@@ -84,8 +102,9 @@
                     pointBackgroundColor: '#343a40',
                 }]
             };
-    
+      
             const chartOptions = {
+                //maintainAspectRatio: false, // Add this line
                 scales: {
                     x: {
                         ticks: {
@@ -116,16 +135,31 @@
                     }
                 }
             };
-    
+      
             const ctx = document.getElementById('hexPriceChart').getContext('2d');
             hexPriceChart = new Chart(ctx, {
                 type: 'line',
                 data: chartData,
                 options: chartOptions
             });
-        })();
-    </script>
-        
+      
+            resizeChart();
+        }
+      
+        window.addEventListener("resize", resizeChart);
+      
+        window.addEventListener('load', function() {
+            initializeChart();
+        });
+      
+        function changeFontSize(fontSize) {
+            hexPriceChart.options.scales.x.ticks.font.size = fontSize;
+            hexPriceChart.options.scales.y.ticks.font.size = fontSize;
+            hexPriceChart.options.plugins.legend.labels.font.size = fontSize;
+            hexPriceChart.update();
+        }
+      </script>
+      
     
     
 </body>
