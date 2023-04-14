@@ -418,11 +418,9 @@
                 tile.appendChild(progressRing);
                 hexStakesContainer.appendChild(tile);
 
-                totalHex += parseFloat(stake.principal) + parseFloat(stake.payout.replace(/,/g, '')) + parseFloat(stake.bigPayDay.replace(/,/g, ''));
-                totalHexValue += (parseFloat(stake.principal) + parseFloat(stake.payout.replace(/,/g, '')) + parseFloat(stake.bigPayDay.replace(/,/g, ''))) * hexPrice;
-    
+                
             }
-            
+
             document.getElementById("hexTotalAmount").textContent = totalHex.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             document.getElementById("hexTotalValue").textContent = totalHexValue.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
