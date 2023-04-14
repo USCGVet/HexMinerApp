@@ -197,8 +197,8 @@
             totalHex += parseFloat(hexBalance);
             totalHexValue += parseFloat(parseFloat(totalHex) * parseFloat(hexPrice));
 
-            console.warn('totalHex:', totalHex);
-            console.warn('totalHexValue:', totalHexValue);
+            console.log('totalHex:', totalHex);
+            console.log('totalHexValue:', totalHexValue);
 
             const formattedHexBalance = hexBalance.toLocaleString('en');
             const hexPriceText = `Hex Price: $${hexPrice.toLocaleString('en', {minimumFractionDigits: 6, maximumFractionDigits: 8})} USD (${hexChange.toFixed(2)}%)`;
