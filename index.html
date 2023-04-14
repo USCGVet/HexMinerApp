@@ -17,7 +17,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bignumber.js/9.0.1/bignumber.min.js"></script>
 
-
     <script src="hex-abi.js"></script>
     <!-- Custom CSS for dark theme -->
     <style>
@@ -155,6 +154,7 @@
     </div>
 
     <script>
+
         const ethAddress = localStorage.getItem('ethAddress');
         const infuraAPIKey = localStorage.getItem('InfuraAPIKey');
 
@@ -299,20 +299,25 @@
             return activeStakes;
         }
 
-
+        function formatUsdValue(value) {
+            if (value >= 1_000_000_000) {
+                return `$${(value / 1_000_000_000).toFixed(1)}B`;
+            } else if (value >= 1_000_000) {
+                return `$${(value / 1_000_000).toFixed(1)}M`;
+            } else if (value >= 1000) {
+                return `$${(value / 1000).toFixed(1)}k`;
+            } else {
+                return `$${value.toFixed(2)}`;
+            }
+        }
 
         async function displayActiveHexStakes(hexPrice) {
             const stakes = await getActiveHexStakes(ethAddress);
-            
 
-            //let totalValue = 0;
             const hexStakesContainer = document.getElementById('hexStakesContainer');
             hexStakesContainer.innerHTML = '';
 
-            
-
             for (const stake of stakes) {
-                
                 const tile = document.createElement('div');
                 tile.className = 'stake-tile';
 
@@ -321,25 +326,22 @@
                 tile.appendChild(index);
 
                 const principal = document.createElement('p');
-                principal.textContent = `Principal: ${stake.principal.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HEX`;
+                principal.innerHTML = `Principal: ${stake.principal.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HEX <span style="font-size: 0.8em;">(${formatUsdValue(stake.principal * hexPrice)})</span>`;
                 tile.appendChild(principal);
 
                 const interest = document.createElement('p');
-                interest.textContent = `Interest: ${stake.payout} HEX`;
+                interest.innerHTML = `Interest: ${stake.payout} HEX <span style="font-size: 0.8em;">(${formatUsdValue(parseFloat(stake.payout.replace(/,/g, '')) * hexPrice)})</span>`;
                 tile.appendChild(interest);
-                                
+
                 const bigPayDay = document.createElement('p');
-                bigPayDay.textContent = `BigPayDay: ${stake.bigPayDay} HEX`;
+                bigPayDay.innerHTML = `BigPayDay: ${stake.bigPayDay} HEX <span style="font-size: 0.8em;">(${formatUsdValue(parseFloat(stake.bigPayDay.replace(/,/g, '')) * hexPrice)})</span>`;
                 tile.appendChild(bigPayDay);
-            
 
                 hexStakesContainer.appendChild(tile);
-
             }
-            
+
             totalHexValue = totalHex * hexPrice;
             console.log('totalHexValue:', totalHexValue);
-            
 
             const hexTotalAmountElement = document.getElementById('hexTotalAmount');
             const hexTotalValueElement = document.getElementById('hexTotalValue');
