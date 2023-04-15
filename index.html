@@ -421,6 +421,8 @@
                 
             }
 
+            totalHexValue = parseFloat(totalHex) * parseFloat(hexPrice);
+                   
             document.getElementById("hexTotalAmount").textContent = totalHex.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             document.getElementById("hexTotalValue").textContent = totalHexValue.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
