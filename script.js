@@ -1,5 +1,6 @@
+
 const ethAddress = localStorage.getItem('ethAddress');
-const rpcSelection = localStorage.getItem('rpcSelection') || `https://www.noderpc.xyz/rpc-mainnet/public`; 
+let rpcSelection = localStorage.getItem('rpcSelection'); 
 
 if (!ethAddress) {
     document.querySelector('.container').innerHTML = `
@@ -8,6 +9,41 @@ if (!ethAddress) {
         </div>
     `;
 } 
+
+if (!rpcSelection) {
+    document.querySelector('.container').innerHTML = `
+        <div class="alert alert-warning">
+            Please set your RPC Blockchain in the <a href="settings.html">Settings</a> page.
+        </div>
+    `;
+} 
+
+
+const blockchainSwitcher = document.getElementById('blockchainSwitcher');
+
+
+if (rpcSelection === 'https://www.noderpc.xyz/rpc-mainnet/public/'){
+     blockchainSwitcher.textContent = 'Ethereum';
+} else {
+     blockchainSwitcher.textContent = 'Pulsechain';
+}
+
+
+blockchainSwitcher.addEventListener('click', () => {
+    if (rpcSelection === 'https://www.noderpc.xyz/rpc-mainnet/public/') {
+        rpcSelection = 'https://rpc.pulsechain.com/';
+        blockchainSwitcher.textContent = 'Pulsechain';
+    } else {
+        rpcSelection = 'https://www.noderpc.xyz/rpc-mainnet/public/';
+        blockchainSwitcher.textContent = 'Ethereum';
+    }
+    localStorage.setItem('rpcSelection', rpcSelection);
+    updateHexData().catch(error => {
+        console.error('Error in updateHexData:', error);
+    });
+    window.location.reload(true);
+});
+
 
 web3 = new Web3(new Web3.providers.HttpProvider(rpcSelection));
 
