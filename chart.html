@@ -8,7 +8,8 @@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
     <!-- Custom CSS for dark theme -->
     <style>
         body {
@@ -48,7 +49,7 @@
                         <a class="nav-link" href="chart.html">Chart</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="settings.html">Settings</a>
+                        <a class="nav-link" href="Settings.html">Settings</a>
                     </li>
                 </ul>
             </div>
@@ -63,6 +64,7 @@
             </div>
             <canvas id="hexPriceChart" style="height: 80vh;"></canvas>
               
+         
         </div>
         
 
@@ -73,6 +75,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1"></script>
 
     <script>
+      
+
         async function fetchHexPriceData() {
             const response = await fetch('https://api.coingecko.com/api/v3/coins/hex/market_chart?vs_currency=usd&days=30&interval=daily');
             const data = await response.json();
