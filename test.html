@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HEX-USDC Exchange Rate</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.5.3/dist/web3.min.js"></script>
+    <script src="Hex-USDC-abi.js"></script>
+</head>
+<body>
+    <h1>HEX-USDC Exchange Rate</h1>
+    <p id="exchangeRate">Loading...</p>
+    <p id="currentChain">Loading...</p>
+    <button onclick="switchChain()">Switch Chain</button>
+
+    <script>
+        // https://ethereum.stackexchange.com/questions/102967/free-and-public-ethereum-json-rpc-api-nodes
+        //let rpcUrl = 'https://mainnet.infura.io/v3/007403e23e764f63830a2bac85c40f18'; // Replace with your Infura Project ID
+        let rpcUrl = 'https://www.noderpc.xyz/rpc-mainnet/public'; // Replace with your Infura Project ID
+        let pairAddress = '0xF6DCdce0ac3001B2f67F750bc64ea5beB37B5824'; // Replace with your pair address
+
+        let web3 = new Web3(new Web3.providers.HttpProvider(rpcUrl));
+        let pairContract = new web3.eth.Contract(pairABI, pairAddress);
+
+        async function fetchExchangeRate() {
+            const reserves = await pairContract.methods.getReserves().call();
+            var hexReserves = 0;
+            var usdcReserves = 0;
+            if(rpcUrl === 'https://www.noderpc.xyz/rpc-mainnet/public') {
+                hexReserves = reserves._reserve0 / (10 ** 8); // HEX has 8 decimal places
+                usdcReserves = reserves._reserve1 / (10 ** 6); // USDC has 6 decimal places
+            } else {
+                hexReserves = reserves._reserve1 / (10 ** 8); // HEX has 8 decimal places
+                usdcReserves = reserves._reserve0 / (10 ** 6); // USDC has 6 decimal places
+            }
+
+            const exchangeRate =  usdcReserves / hexReserves;
+
+            document.getElementById('exchangeRate').textContent = `1 HEX = ${exchangeRate} USDC`;
+        }
+
+        function switchChain() {
+            if (rpcUrl === 'https://www.noderpc.xyz/rpc-mainnet/public') {
+                rpcUrl = 'https://rpc.pulsechain.com';
+                pairAddress = '0x2cc85b82Ce181bce921dc4c0758CFd37a6BC240A';
+                document.getElementById('currentChain').textContent = 'Current Chain: PulseChain';
+            } else {
+                rpcUrl = 'https://www.noderpc.xyz/rpc-mainnet/public';
+                pairAddress = '0xF6DCdce0ac3001B2f67F750bc64ea5beB37B5824';
+                document.getElementById('currentChain').textContent = 'Current Chain: Ethereum';
+            }
+
+            web3 = new Web3(new Web3.providers.HttpProvider(rpcUrl));
+            pairContract = new web3.eth.Contract(pairABI, pairAddress);
+
+            fetchExchangeRate();
+        }
+
+        fetchExchangeRate();
+        document.getElementById('currentChain').textContent = 'Current Chain: Ethereum';
+    </script>
+</body>
+</html>

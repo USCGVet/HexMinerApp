@@ -1,0 +1,125 @@
+
+    
+        body {
+            background-color: #343a40;
+            color: #fff;
+        }
+    
+    
+        .hex-balance-container {
+            background: linear-gradient(to bottom right, #533601, #946102);
+            border-radius: 8px;
+            padding: 16px;
+            display: inline-block;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hex-balance-container::before {
+            content: "";
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 80%);
+            animation: ripple 3s ease-in-out infinite; /* Updated animation */
+            opacity: 0.4;
+        }
+        
+        .hex-balance {
+            font-size: 24px;
+            margin: 0;
+            color: #fff;
+        }
+        
+        @keyframes ripple {
+            0% {
+            transform: scale(1);
+            }
+            50% {
+            transform: scale(2);
+            }
+            100% {
+            transform: scale(1);
+            }
+        }
+
+        .hex-stake-table {
+            width: 100%;
+            border-collapse: collapse;
+            color: #ffffff;
+        }
+
+        .hex-stake-table th,
+        .hex-stake-table td {
+            border: 1px solid #ffffff;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .hex-stake-table th {
+            background-color: #005D8F;
+        }
+
+        .stake-container {
+            display: flex;
+            flex-wrap: wrap;
+            margin: -8px;
+            flex-direction: column;
+        }
+
+        .stake-tile {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #005D8F;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 8px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 400px; /* You can adjust this value to set the max width of the stake tiles */
+        }
+
+        .stake-tile > p {
+            margin: 0;
+            margin-bottom: 4px;
+        }
+
+        .stake-total-value {
+            font-size: 24px;
+            margin-bottom: 16px;
+        }
+    
+    
+        .stake-tile {
+            position: relative;
+        }
+    
+        .progress-ring {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 50px;
+            height: 50px;
+        }
+    
+        .progress-ring__circle {
+            transition: 0.35s stroke-dashoffset;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+    
+    
+        .progress-percentage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+        }
+    
