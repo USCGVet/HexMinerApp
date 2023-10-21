@@ -22,7 +22,7 @@ if (!rpcSelection) {
 const blockchainSwitcher = document.getElementById('blockchainSwitcher');
 
 
-if (rpcSelection === 'https://www.noderpc.xyz/rpc-mainnet/public/'){
+if (rpcSelection === 'https://uscgvetpassthru.azurewebsites.net/api/infura/proxy/'){
      blockchainSwitcher.textContent = 'Ethereum';
 } else {
      blockchainSwitcher.textContent = 'Pulsechain';
@@ -30,11 +30,11 @@ if (rpcSelection === 'https://www.noderpc.xyz/rpc-mainnet/public/'){
 
 
 blockchainSwitcher.addEventListener('click', () => {
-    if (rpcSelection === 'https://www.noderpc.xyz/rpc-mainnet/public/') {
+    if (rpcSelection === 'https://uscgvetpassthru.azurewebsites.net/api/infura/proxy/') {
         rpcSelection = 'https://rpc.pulsechain.com/';
         blockchainSwitcher.textContent = 'Pulsechain';
     } else {
-        rpcSelection = 'https://www.noderpc.xyz/rpc-mainnet/public/';
+        rpcSelection = 'https://uscgvetpassthru.azurewebsites.net/api/infura/proxy/';
         blockchainSwitcher.textContent = 'Ethereum';
     }
     localStorage.setItem('rpcSelection', rpcSelection);
@@ -51,7 +51,7 @@ const hexContractAddress = '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39'; // Same
 
 let pairAddress = '0xF6DCdce0ac3001B2f67F750bc64ea5beB37B5824'; // Replace with your pair address
 
-if (rpcSelection === 'https://www.noderpc.xyz/rpc-mainnet/public/') {    
+if (rpcSelection === 'https://uscgvetpassthru.azurewebsites.net/api/infura/proxy/') {    
     pairAddress = '0xF6DCdce0ac3001B2f67F750bc64ea5beB37B5824'; // ETH Pair of Hex/USDC
 } else {
     pairAddress = '0x2cc85b82Ce181bce921dc4c0758CFd37a6BC240A'; // PulseChain Pair of Hex/USDC(From ETH)
@@ -84,7 +84,7 @@ async function updateHexData() {
     //const reserves = await pairContract.methods.getReserves().call();
     var hexReserves = 0;
     var usdcReserves = 0;
-    if(rpcSelection === 'https://www.noderpc.xyz/rpc-mainnet/public/') {
+    if(rpcSelection === 'https://uscgvetpassthru.azurewebsites.net/api/infura/proxy/') {
         hexReserves = reserves._reserve0 / (10 ** 8); // HEX has 8 decimal places
         usdcReserves = reserves._reserve1 / (10 ** 6); // USDC has 6 decimal places
     } else {
