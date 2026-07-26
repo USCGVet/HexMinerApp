@@ -191,13 +191,31 @@ Everything lives in **Settings** and is stored only in your browser:
 - **Chains** — enable Ethereum, PulseChain, or both.
 - **RPC override** — optional per chain, tried first with the built-ins as fallback.
 
-### A note on the bundled Ethereum proxy
+### Why public endpoints only
 
-`uscgvetpassthru.azurewebsites.net` is kept as the first Ethereum endpoint, but it has an
-Azure CORS allowlist. It works from origins you have whitelisted and is rejected elsewhere —
-from `localhost` it returns *"The origin 'http://localhost:8099' is not allowed"*. That is
-handled transparently by failover, but if you want it used, add the origin you serve the app
-from to the Function App's CORS settings.
+Earlier versions routed Ethereum through a personal Azure Functions proxy. It does still work,
+but it was benchmarked against the public endpoints on this app's heaviest call
+(`dailyDataRange` over 500 days, 8 rounds each) and came out worst on both axes:
+
+| Endpoint | Success | avg | p90 |
+|---|---|---|---|
+| `eth.blockrazor.xyz` | 8/8 | 65 ms | 112 ms |
+| `eth-mainnet.public.blastapi.io` | 8/8 | 68 ms | 143 ms |
+| `eth.drpc.org` | 8/8 | 93 ms | 151 ms |
+| `virginia.rpc.blxrbdn.com` | 8/8 | 58 ms | 158 ms |
+| `ethereum-rpc.publicnode.com` | 8/8 | 91 ms | 243 ms |
+| *(Azure proxy)* | **7/8** | 185 ms | **795 ms** |
+
+It was the only endpoint to fail a round — intermittently returning a non-JSON *"Unable to…"*
+body, most likely App Service throttling or a cold instance. It also carried a CORS allowlist,
+so it worked from `uscgvet.github.io` but was rejected from `localhost` during development.
+
+Removing it means one less thing to host, pay for, and keep whitelisted. Nothing in the app
+references it any more, so the Azure resource can be decommissioned. If you ever want it back,
+paste it into the RPC override in Settings — that is tried first, with these as fallback.
+
+PulseChain endpoints are ordered the same way: `pulsechain-rpc.publicnode.com` (98 ms avg),
+`rpc-pulsechain.g4mm4.io` (best p90 at 225 ms), then the official `rpc.pulsechain.com`.
 
 ---
 

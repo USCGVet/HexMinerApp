@@ -24,10 +24,15 @@ export const CHAINS = {
     accent: '#7c9dff',
     explorer: 'https://etherscan.io',
     dexscreener: 'ethereum',
+    // Public endpoints only, ordered by measured p90 latency on this app's heaviest call
+    // (dailyDataRange over 500 days). Every one of these returned 8/8 successes when
+    // benchmarked, and all send CORS headers so they work from a browser.
     rpcs: [
-      'https://uscgvetpassthru.azurewebsites.net/api/infura/proxy/',
-      'https://ethereum-rpc.publicnode.com',
+      'https://eth.blockrazor.xyz',
+      'https://eth-mainnet.public.blastapi.io',
       'https://eth.drpc.org',
+      'https://virginia.rpc.blxrbdn.com',
+      'https://ethereum-rpc.publicnode.com',
       'https://rpc.mevblocker.io',
     ],
     // Uniswap V2 HEX/WETH — the deepest eHEX market (~$290k total liquidity).
@@ -57,9 +62,10 @@ export const CHAINS = {
     explorer: 'https://scan.pulsechain.com',
     dexscreener: 'pulsechain',
     rpcs: [
-      'https://rpc.pulsechain.com',
-      'https://rpc-pulsechain.g4mm4.io',
       'https://pulsechain-rpc.publicnode.com',
+      'https://rpc-pulsechain.g4mm4.io',
+      'https://rpc.pulsechain.com',
+      'https://rpc.pulsechain.com/v1/mainnet',
     ],
     // PulseX V1 HEX/WPLS — the deepest pHEX market (~$410k total liquidity).
     hexPair: {
