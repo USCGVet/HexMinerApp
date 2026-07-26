@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>HEX Miner — JDAI</title>
+<meta name="description" content="JDAI, a gold-pegged unstablecoin on PulseChain, and its governance token Taker.">
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="index.html">
+    <span class="brand-mark" aria-hidden="true">⬢</span>
+    <span>HEX&nbsp;Miner</span>
+  </a>
+  <nav class="nav">
+    <a href="index.html">Portfolio</a>
+    <a href="chart.html">Charts</a>
+    <a class="active" href="jdai.html">JDAI</a>
+    <a href="settings.html">Settings</a>
+  </nav>
+  <button class="btn btn-icon" id="refreshBtn" title="Reload from chain">Refresh</button>
+</header>
+
+<div class="statusbar" id="statusBar"></div>
+
+<main id="main" class="wrap"></main>
+
+<footer class="foot wrap">
+  <p>
+    JDAI and Taker live on PulseChain at
+    <code>0x1610E75C9b48BF550137820452dE4049bB22bB72</code> and
+    <code>0xd9e59020089916A8EfA7Dd0B605d55219D72dB7B</code>.
+    Prices are read from PulseX pools on-chain. Read-only — no signatures, no transactions.
+  </p>
+</footer>
+
+<script type="module" src="js/jdai-page.js"></script>
+</body>
+</html>

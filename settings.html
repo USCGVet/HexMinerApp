@@ -1,109 +1,98 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My HEX Valuation - Settings</title>
-    <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <!-- jQuery library -->
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <!-- Popper JS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
-    <!-- Bootstrap JS -->
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
-    
-    <!-- Custom CSS for dark theme -->
-    <style>
-        body {
-            background-color: #343a40;
-            color: #fff;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>HEX Miner — Settings</title>
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <a class="navbar-brand" href="#">Hex Miner App</a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav">
-                <li class="nav-item">
-                    <a class="nav-link" href="index.html">Home</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="chart.html">Chart</a>
-                </li>
-                <li class="nav-item active">
-                    <a class="nav-link" href="#">Settings</a>
-                </li>
-            </ul>
-        </div>
-    </nav>
 
-    <div class="container mt-4">
-        <h2>Settings</h2>
-        <form id="settingsForm">
-            <div class="form-group">
-                <label for="ethAddress">ETH Address:</label>
-                <input type="text" class="form-control" id="ethAddress" placeholder="Enter your ETH address" required>
-                <br>                   
-               
-                <label for="rpcSelection">Select Blockchain:</label>
-                <select class="form-control" id="rpcSelection">
-                    <option value="https://uscgvetpassthru.azurewebsites.net/api/infura/proxy/">Ethereum</option>
-                    <option value="https://rpc.pulsechain.com/">PulseChain</option>
-                </select>
-            </div>
-            <button type="submit" class="btn btn-primary">Save</button>
-        </form>
-        
+<header class="topbar">
+  <a class="brand" href="index.html">
+    <span class="brand-mark" aria-hidden="true">⬢</span>
+    <span>HEX&nbsp;Miner</span>
+  </a>
+  <nav class="nav">
+    <a href="index.html">Portfolio</a>
+    <a href="chart.html">Charts</a>
+    <a href="jdai.html">JDAI</a>
+    <a class="active" href="settings.html">Settings</a>
+  </nav>
+</header>
+
+<main class="wrap">
+
+  <div id="flash"></div>
+
+  <section class="card">
+    <div class="section-head"><h2>Addresses</h2></div>
+    <p class="muted small" style="margin-top:-8px">
+      Track as many addresses as you like — they are combined into one portfolio. Nothing
+      leaves your browser except the read-only RPC calls needed to fetch balances.
+    </p>
+
+    <div class="addr-list" id="addrList"></div>
+
+    <form id="addForm" novalidate>
+      <div class="row">
+        <div class="field">
+          <label for="addrInput">HEX / Ethereum address</label>
+          <input type="text" id="addrInput" placeholder="0x…" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="field" style="flex:0 1 180px">
+          <label for="labelInput">Label (optional)</label>
+          <input type="text" id="labelInput" placeholder="e.g. Cold wallet" maxlength="40">
+        </div>
+        <button class="btn btn-primary" type="submit">Add</button>
+        <button class="btn" type="button" id="connectBtn">Connect wallet</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="section-head"><h2>Chains</h2></div>
+    <p class="muted small" style="margin-top:-8px">
+      HEX exists at the same contract address on both chains because PulseChain forked
+      Ethereum's state — your pre-fork stakes appear on both. The two tokens trade at
+      different prices, so each chain is valued from its own DEX pool.
+    </p>
+    <div class="toggle-row" id="chainToggles"></div>
+  </section>
+
+  <section class="card">
+    <div class="section-head"><h2>Advanced</h2></div>
+
+    <div class="field">
+      <label for="refreshSel">Auto-refresh</label>
+      <select id="refreshSel">
+        <option value="0">Manual only</option>
+        <option value="60">Every minute</option>
+        <option value="300">Every 5 minutes</option>
+        <option value="900">Every 15 minutes</option>
+      </select>
     </div>
 
+    <div id="rpcFields"></div>
 
-    <script>
+    <div class="field">
+      <label>Cached daily data</label>
+      <p class="muted small" style="margin:0 0 8px">
+        The contract's <code class="mono">dailyData</code> is append-only, so past days are
+        cached locally and only new days are fetched. Clearing it forces a full re-read.
+      </p>
+      <button class="btn" type="button" id="clearCacheBtn">Clear cache</button>
+    </div>
+  </section>
 
-        const settingsForm = document.getElementById('settingsForm');
-        const ethAddressInput = document.getElementById('ethAddress');
+</main>
 
-       
-        const rpcSelection = document.getElementById('rpcSelection');
+<footer class="foot wrap">
+  <p>Read-only. This app holds no keys, requests no signatures and sends no transactions.</p>
+</footer>
 
-        // Load the saved ETH address from local storage and display it in the input field
-        const savedEthAddress = localStorage.getItem('ethAddress');       
-        const savedRpcSelection = localStorage.getItem('rpcSelection');
-
-        if (savedEthAddress) {
-            ethAddressInput.value = savedEthAddress;
-        }
-
-        if (savedRpcSelection) {
-            rpcSelection.value = savedRpcSelection;
-        }
-
-        // Regular expression to match the format of an Ethereum address
-        const ethAddressRegex = /^(0x)?[0-9a-fA-F]{40}$/;
-
-        // Validate the ETH address when the form is submitted
-        settingsForm.addEventListener('submit', (event) => {
-            event.preventDefault(); // Prevent the form from reloading the page
-
-            const ethAddressValue = ethAddressInput.value.trim();            
-            const rpcSelectionValue = rpcSelection.value;
-
-            if (!ethAddressRegex.test(ethAddressValue)) {
-                alert('Please enter a valid Ethereum address.');
-                return;
-            }
-
-            
-            localStorage.setItem('ethAddress', ethAddressValue);           
-            localStorage.setItem('rpcSelection', rpcSelectionValue);
-            alert('Settings saved successfully...');
-        });
-
-    </script>
+<script type="module" src="js/settings-page.js"></script>
 </body>
 </html>
