@@ -36,18 +36,19 @@ The implementation was checked against **2,734 real historical `StakeEnd` events
 Ethereum. `dailyData` is append-only in the contract and the claim-phase globals froze on day
 351, so today's chain state reproduces any post-Big-Pay-Day stake end exactly. Result:
 
-| Code path | Stakes checked | Mismatches |
-|---|---|---|
-| pre-BPD, matured | 1394 | 0 |
-| pre-BPD, matured + late penalty | 716 | 0 |
-| pre-BPD, ended early | 142 | 0 |
-| post-BPD, matured | 349 | 0 |
-| post-BPD, matured + late penalty | 89 | 0 |
-| post-BPD, ended early | 44 | 0 |
+| Code path | Ethereum | PulseChain | Mismatches |
+|---|---|---|---|
+| pre-BPD, matured | 1394 | 1256 | 0 |
+| pre-BPD, matured + late penalty | 716 | 696 | 0 |
+| pre-BPD, ended early | 142 | 108 | 0 |
+| post-BPD, matured | 349 | 311 | 0 |
+| post-BPD, matured + late penalty | 89 | 65 | 0 |
+| post-BPD, ended early | 44 | 48 | 0 |
+| **total** | **2734** | **2484** | **0** |
 
-Payout **and** penalty **and** served-days matched exactly in all 2,734 cases. A further five
-live stakes were cross-checked by simulating `stakeEnd()` through `debug_traceCall` and reading
-the payout straight out of the emitted event — also exact.
+Payout **and** penalty **and** served-days matched exactly in all **5,218** cases across both
+chains. A further five live stakes were cross-checked by simulating `stakeEnd()` through
+`debug_traceCall` and reading the payout straight out of the emitted event — also exact.
 
 Big Pay Day works out to **≈3,641.66 HEX per T-share**, matching the long-published figure.
 
