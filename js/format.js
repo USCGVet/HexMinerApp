@@ -79,5 +79,18 @@ export function fmtAgo(ts) {
   if (s < 5) return 'just now';
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  return `${Math.floor(s / 3600)}h ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  const d = Math.floor(s / 86400);
+  return d === 1 ? '1 day ago' : `${d} days ago`;
+}
+
+/**
+ * A price impact. In a pool holding tens of dollars this runs into the tens of thousands
+ * of percent, where a percentage stops meaning anything — past 10x, say it as a multiple.
+ */
+export function fmtImpact(frac) {
+  if (frac == null || !isFinite(frac)) return '—';
+  if (frac >= 9) return (1 + frac).toLocaleString('en-US', { maximumFractionDigits: 0 }) + '×';
+  const pct = frac * 100;
+  return pct.toFixed(pct >= 10 ? 0 : 1) + '%';
 }

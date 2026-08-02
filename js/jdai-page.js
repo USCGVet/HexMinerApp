@@ -7,9 +7,11 @@
 
 import { loadSettings } from './config.js';
 import { loadTokensSnapshot, loadPairExtras } from './hexdata.js';
-import { PULSE_TOKENS, jdaiTokens, jdaiTargetUsd, jdaiVaultStats } from './tokens.js';
-import { renderTokenCard } from './tokencard.js';
-import { esc, fmtUsd, fmtPrice, fmtPct, fmtAgo, compact } from './format.js';
+import {
+  PULSE_TOKENS, jdaiTokens, jdaiTargetUsd, jdaiVaultStats, priceQuality, IMPACT_PROBE_USD,
+} from './tokens.js';
+import { renderTokenCard, priceFlag } from './tokencard.js';
+import { esc, fmtUsd, fmtPrice, fmtPct, fmtAgo, fmtImpact, compact } from './format.js';
 
 const state = {
   settings: loadSettings(),
@@ -76,8 +78,13 @@ function render() {
 
   const j = tk.jdai;
   const target = jdaiTargetUsd(j.par);
-  const market = tk.prices.JDAI?.usd;
+  const price = tk.prices.JDAI || {};
+  const market = price.usd;
+  const q = priceQuality(price);
+  // A premium measured against a pool holding a few dollars is noise dressed up as a
+  // market signal, so it is only claimed when the pool could absorb a real order.
   const premium = market && target ? (market / target - 1) * 100 : null;
+  const showPremium = q.ok && premium != null;
 
   // Only shown when one of the tracked addresses actually has a vault.
   const vaults = j.vaults
@@ -99,9 +106,19 @@ function render() {
         <div class="hero-label">JDAI · PulseChain</div>
         <div class="hero-value">${market != null ? fmtPrice(market) : '—'}</div>
         <div class="hero-sub">
-          gold-pegged unstablecoin · target ${fmtUsd(target)}
-          ${premium != null ? ` · ${fmtPct(premium)} vs peg` : ''}
+          PulseX JDAI/WPLS · peg target ${fmtUsd(target)}
+          ${showPremium ? ` · ${fmtPct(premium)} vs peg` : ''}
         </div>
+        ${
+          q.ok
+            ? ''
+            : `<div class="hero-warn">${priceFlag(q)}
+                 <span>This quote comes from a pool holding ${fmtUsd(q.liquidityUsd)}${
+                   price.lastTradeAt ? `, last traded ${fmtAgo(price.lastTradeAt)}` : ''
+                 }. It is the correct rate for those reserves and nothing more — the peg
+                 target of ${fmtUsd(target)} is the better estimate of what a JDAI is worth.</span>
+               </div>`
+        }
       </div>
       <div class="jdai-pitch">
         <p>
@@ -123,12 +140,28 @@ function render() {
     <section class="card">
       <div class="section-head"><h2>Live pricing</h2></div>
       <div class="hero-breakdown">
-        ${tile('Market price', market != null ? fmtPrice(market) : '—', 'PulseX JDAI/WPLS')}
         ${tile('Peg target', fmtUsd(target), '1/1000 oz gold')}
-        ${tile('Premium to peg', premium != null ? fmtPct(premium) : '—',
-          premium == null ? '' : premium >= 0 ? 'trading above target' : 'trading below target')}
         ${tile('Implied gold', fmtUsd(target * 1000), 'per ounce')}
+        ${tile('Pool quote', market != null ? fmtPrice(market) : '—',
+          q.ok ? 'PulseX JDAI/WPLS' : 'thin — see below')}
+        ${
+          showPremium
+            ? tile('Premium to peg', fmtPct(premium),
+                premium >= 0 ? 'trading above target' : 'trading below target')
+            : tile('Pool depth', fmtUsd(q.liquidityUsd),
+                `a $${IMPACT_PROBE_USD} buy moves it by ${fmtImpact(q.impact)}`)
+        }
       </div>
+      ${
+        q.ok
+          ? ''
+          : `<p class="muted small" style="margin:14px 0 0">
+               Only ${compact(Number(tk.supplies.JDAI || 0n) / 1e18)} JDAI exist, so no deep
+               market can form around it yet. Depth is read from the pair's own reserves —
+               DexScreener does not index a pool this small, so its silence is not a
+               second opinion.
+             </p>`
+      }
     </section>
 
     <section>

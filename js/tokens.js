@@ -188,6 +188,53 @@ export function consumedDays(currentDay, lockedDay, stakedDays) {
   return 0n;
 }
 
+// --------------------------------------------------------------- pool quality
+
+/**
+ * Below this, a pool quote is a curiosity rather than a price. All four of these tokens
+ * trade in pools holding tens of dollars, where the marginal rate the reserves imply is
+ * arithmetically correct and economically meaningless — a $100 order moves it by orders
+ * of magnitude. So a price is never reported on its own; its depth travels with it.
+ */
+export const THIN_LIQUIDITY_USD = 1000;
+
+/** A pool nobody has traded in this long is quoting a rate, not a market. */
+export const STALE_POOL_SECONDS = 3 * 86400;
+
+/** Reference order used to express depth as something a reader can feel. */
+export const IMPACT_PROBE_USD = 100;
+
+/**
+ * Price impact of buying `usdIn` of the token, exactly, for a constant-product pool:
+ * reserves go x*y=k, so the marginal price moves by (1 + dx/x)^2 - 1 where x is the
+ * quote side. Fee-independent, and needs nothing beyond the reserves already read.
+ */
+export function priceImpact(price, usdIn = IMPACT_PROBE_USD) {
+  const quoteSideUsd = (price?.liquidityUsd ?? 0) / 2;
+  if (!quoteSideUsd) return null;
+  return (1 + usdIn / quoteSideUsd) ** 2 - 1;
+}
+
+/**
+ * Whether a pool quote can be read as a price. Returns structured facts rather than
+ * prose so the pages can word it themselves — nothing in this module formats.
+ */
+export function priceQuality(price, now = Date.now()) {
+  const usable = price && price.usd != null;
+  const liquidityUsd = price?.liquidityUsd ?? null;
+  const ageSeconds = price?.lastTradeAt ? Math.max(0, (now - price.lastTradeAt) / 1000) : null;
+  const thin = usable && liquidityUsd != null && liquidityUsd < THIN_LIQUIDITY_USD;
+  const stale = usable && ageSeconds != null && ageSeconds > STALE_POOL_SECONDS;
+  return {
+    ok: Boolean(usable) && !thin && !stale,
+    thin: Boolean(thin),
+    stale: Boolean(stale),
+    liquidityUsd,
+    ageSeconds,
+    impact: usable ? priceImpact(price) : null,
+  };
+}
+
 // --------------------------------------------------------------- loading
 
 /**
@@ -260,10 +307,11 @@ export async function loadPulseTokens(rpc, block, addresses, stakes, plsUsd) {
 
   // ---- prices
   const prices = {};
+  const noPrice = { usd: null, liquidityUsd: null, reserveToken: null, reservePls: null, lastTradeAt: null };
   for (const t of list) {
     const i = priceIdx[t.key];
     if (!r[i]?.success || !r[i + 1]?.success) {
-      prices[t.key] = { usd: null, liquidityUsd: null };
+      prices[t.key] = { ...noPrice };
       continue;
     }
     const tokenIsToken0 = decodeAddress(r[i].data).toLowerCase() === t.address.toLowerCase();
@@ -271,7 +319,7 @@ export async function loadPulseTokens(rpc, block, addresses, stakes, plsUsd) {
     const tokRes = tokenIsToken0 ? res.reserve0 : res.reserve1;
     const plsRes = tokenIsToken0 ? res.reserve1 : res.reserve0;
     if (tokRes === 0n || plsRes === 0n) {
-      prices[t.key] = { usd: null, liquidityUsd: 0 };
+      prices[t.key] = { ...noPrice, liquidityUsd: 0 };
       continue;
     }
     const tokAmt = Number(tokRes) / 10 ** t.decimals;
@@ -281,6 +329,10 @@ export async function loadPulseTokens(rpc, block, addresses, stakes, plsUsd) {
       usd,
       // both sides of the pool, which is what DexScreener reports as liquidity
       liquidityUsd: plsAmt * plsUsd * 2,
+      reserveToken: tokAmt,
+      reservePls: plsAmt,
+      // the pair's own clock: V2 stamps this on every mint, burn and swap
+      lastTradeAt: res.blockTimestampLast ? Number(res.blockTimestampLast) * 1000 : null,
     };
   }
 

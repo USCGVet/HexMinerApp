@@ -510,6 +510,21 @@ select:hover { border-color: var(--laser); color: var(--laser); }
 
 /* ---------------------------------------------------------------- jdai page */
 
+.hero-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 201, 74, .28);
+  border-left: 2px solid var(--warn);
+  border-radius: 8px;
+  background: rgba(255, 201, 74, .06);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .jdai-hero { grid-template-columns: minmax(230px, 1fr) 1.5fr; }
 .jdai-hero .hero-value { color: #ffe9b8; text-shadow: 0 0 26px rgba(255, 201, 74, .5), 0 0 60px rgba(255, 201, 74, .2); }
 .jdai-hero::before { background: linear-gradient(90deg, transparent, var(--warn) 25%, var(--laser) 70%, transparent); box-shadow: 0 0 16px rgba(255, 201, 74, .6); }
@@ -660,8 +675,28 @@ select:hover { border-color: var(--laser); color: var(--laser); }
   display: flex;
   align-items: baseline;
   gap: 11px;
+  flex-wrap: wrap;
   color: var(--text);
   text-shadow: 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* A price from a pool too thin or too stale to trade at should not glow like a real one. */
+.chain-price.unreliable { color: var(--muted); text-shadow: none; }
+
+.price-flag {
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--warn);
+  border: 1px solid rgba(255, 201, 74, .4);
+  background: rgba(255, 201, 74, .09);
+  border-radius: 5px;
+  padding: 3px 7px;
+  text-shadow: none;
+  cursor: help;
 }
 
 .chg { font-size: 13px; font-weight: 700; font-family: var(--mono); }
@@ -1015,6 +1050,21 @@ code.mono, .foot code { font-family: var(--mono); color: var(--laser); }
 
 .foot { color: var(--dim); font-size: 12px; padding: 14px 22px 44px; }
 .foot p { max-width: 92ch; }
+
+/* Stamped in by js/version.js so the four footers have nothing to keep in sync. */
+.foot-version {
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .03em;
+  color: var(--dim);
+}
+
+.foot-version-tag {
+  color: var(--laser);
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(34, 211, 238, .45);
+}
 
 /* ---------------------------------------------------------------- responsive */
 

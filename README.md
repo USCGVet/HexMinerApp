@@ -132,17 +132,21 @@ and `determineTier()` — 160 reward combinations and every tier boundary, all e
 HXR and Savant are intentionally scarce — closer to trading cards than to a liquidity play. Every
 token in existence was minted by someone staking HEX, one claim per stake, with tiers capped at
 369 stakes each. The cards lead with **in existence** rather than market cap, show tier capacity,
-and report pool size as a plain figure with no editorialising. Taker is flagged **fixed supply**:
-1,000,000 exist and the contract has no mint function.
+and report pool size and time since the last trade next to every price — all four pools are thin
+enough that the quote needs that context to be read honestly ([Thin pools](#thin-pools)). Taker is
+flagged **fixed supply**: 1,000,000 exist and the contract has no mint function.
 
 Token values are kept in their own panel rather than folded into the headline HEX total — not as a
 warning, just so the HEX number stays a HEX number.
 
 ### JDAI
 
-JDAI has its own tab: what it is, live price, peg target, premium, implied gold price, and links
+JDAI has its own tab: what it is, the peg target, implied gold price, the pool quote, and links
 into the DApp. Deliberately light — vault management belongs in the JDAI DApp, and this page
 exists so HEX stakers discover that JDAI and Taker exist.
+
+The peg target leads, not the DEX quote, because only 19.69 JDAI exist and the single PulseX
+`JDAI/WPLS` pool holds about $10 — see [Thin pools](#thin-pools).
 
 `par` is JDAI's target price and tracks 1/1000 oz of gold (currently ≈ $4.08, implying
 ≈ $4,084/oz). If a tracked address happens to have a vault, one compact summary is shown. Vault
@@ -165,6 +169,29 @@ assumed:
 
 These are the deepest available pools. DexScreener is used only to add 24h change and volume,
 and the app works fine without it.
+
+### Thin pools
+
+The four secondary tokens are a different situation. Each has exactly one pool — the PulseX V2
+pair against WPLS, confirmed against both factories — and every one of them is dust:
+
+| Token | Pool | Depth | Quote |
+|---|---|---|---|
+| HXR | `0xD5A8…F612` | ~$43 | ~$14.71 |
+| SAVANT | `0xaAA8…0742` | ~$22 | ~$16.42 |
+| JDAI | `0x7065…350f` | ~$10 | ~$5.13 |
+| TKR | `0x205C…F0f0` | ~$39 | ~$0.158 |
+
+Constant-product math on those reserves is arithmetically right and economically meaningless: a
+$100 buy in the JDAI pool moves the price roughly 400×. So a quote is never shown on its own. The
+pair's reserves and its `blockTimestampLast` come back with every price read, and any pool under
+$1,000 of liquidity or three days without a trade is flagged **thin market** — its price is
+de-emphasised, and derived claims that would read as market signal are withheld rather than
+computed. On the JDAI page that means no premium-to-peg figure while the pool is this thin; a
++26% "premium" out of a $10 pool is noise, not information.
+
+DexScreener does not index pools this small, so it cannot serve as a second opinion here — depth
+is read from the pair itself.
 
 ---
 
@@ -237,8 +264,13 @@ js/
   config.js       chains, addresses, settings store
   charts.js       SVG line charts with hover
   format.js       display formatting
-  app.js / chart-page.js / jdai-page.js / settings-page.js
+  version.js      version string, stamped into every footer at runtime
+  app.js / chart-page.js / jdai-page.js / settings-page.js / tokencard.js
 ```
+
+There is no build step — the files are served as written. `js/version.js` holds the version
+in one place and appends it to each footer, so a deploy is visible on the page itself. Bump
+`APP_VERSION` and `BUILD_DATE` there in the same commit that ships a change.
 
 ---
 

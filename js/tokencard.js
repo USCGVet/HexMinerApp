@@ -1,11 +1,25 @@
 /** Shared token card, used by both the portfolio page and the JDAI page. */
 
 import { CHAINS } from './config.js';
-import { TOKENS_CHAIN_ID, TIER_LABELS } from './tokens.js';
-import { esc, fmtUsd, fmtPrice, fmtPct } from './format.js';
+import { TOKENS_CHAIN_ID, TIER_LABELS, priceQuality, IMPACT_PROBE_USD } from './tokens.js';
+import { esc, fmtUsd, fmtPrice, fmtPct, fmtAgo, fmtImpact } from './format.js';
 
 const fmtTok = (v, d = 5) =>
   (Number(v) / 1e18).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+/**
+ * A chip saying why the number next to it is not a price you could trade at. Both
+ * conditions are worth naming separately: a thin pool misprices, a stale one just
+ * repeats whatever the last trade left behind.
+ */
+export function priceFlag(q) {
+  if (!q || q.ok) return '';
+  const why = [];
+  if (q.thin) why.push(`the pool holds ${fmtUsd(q.liquidityUsd)} in total — a $${IMPACT_PROBE_USD} buy moves the price by ${fmtImpact(q.impact)}`);
+  if (q.stale) why.push('nothing has traded in it for days');
+  if (!why.length) return '';
+  return `<span class="price-flag" title="${esc(why.join('; '))}">${q.thin ? 'thin market' : 'stale'}</span>`;
+}
 
 /**
  * @param t       entry from PULSE_TOKENS
@@ -18,7 +32,10 @@ export function renderTokenCard(t, tk, extras, { tiers = false } = {}) {
   const bal = tk.balances[t.key] || 0n;
   const val = pr.usd != null ? (Number(bal) / 1e18) * pr.usd : null;
   const chg = extras?.change24h;
+  // Depth is judged on the reserves we read ourselves — DexScreener does not index
+  // pools this small, so its silence is not evidence that the pool is fine.
   const liq = extras?.liquidityUsd ?? pr.liquidityUsd;
+  const q = priceQuality(pr);
 
   const tierStrip =
     tiers && tk.tiers?.[t.key]
@@ -40,13 +57,14 @@ export function renderTokenCard(t, tk, extras, { tiers = false } = {}) {
       <span class="badge">${esc(t.symbol)}</span>
       ${t.fixedSupply ? '<span class="badge fixed" title="No mint function — the supply can never increase">fixed supply</span>' : ''}
     </div>
-    <div class="chain-price">
+    <div class="chain-price ${q.ok ? '' : 'unreliable'}">
       ${pr.usd != null ? fmtPrice(pr.usd) : '<span class="muted">no price</span>'}
       ${chg != null ? `<span class="chg ${chg >= 0 ? 'up' : 'down'}">${fmtPct(chg)}</span>` : ''}
+      ${priceFlag(q)}
     </div>
     <div class="muted small">${liq != null ? `pool ${fmtUsd(liq)}` : ''}${
-      extras?.volume24h != null ? ` · 24h vol ${fmtUsd(extras.volume24h)}` : ''
-    }</div>
+      pr.lastTradeAt ? ` · traded ${fmtAgo(pr.lastTradeAt)}` : ''
+    }${extras?.volume24h != null ? ` · 24h vol ${fmtUsd(extras.volume24h)}` : ''}</div>
     ${t.blurb ? `<p class="token-blurb">${esc(t.blurb)}</p>` : ''}
     <dl class="kv">
       <div><dt>In existence</dt><dd class="supply">${fmtTok(tk.supplies[t.key] || 0n, 2)}</dd></div>
