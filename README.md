@@ -139,6 +139,11 @@ collision that afflicts HexRewards cannot happen here.
   runs HEX `stakeGoodAccounting()` on the stake as a side effect. The app flags your own stakes
   that are exposed to this.
 
+The start and end bonuses **share one ceiling and do not add up**: `_mintEndBonus` pays
+`maxPayout − stakeIdStartBonusPayout`, so minting the start bonus first reduces the end bonus
+one for one, and the pair together can never exceed `maxPayout`. Totals count the larger of
+the two that is actually reachable, never their sum.
+
 Communis also lets COM be staked back into itself against the debt an end-bonus mint creates;
 staked amount, debt cover and the 91-day payout schedule are all shown.
 
@@ -147,13 +152,19 @@ staked amount, debt cover and the 91-day payout schedule are all shown.
 Hedron also mints against **HSI** stakes — HEX stakes wrapped in their own contract and held by
 the HSI Manager. These are real HEX stakes that never appear in a wallet's own `stakeLists`, so
 before this they were invisible here. Both kinds are now loaded and folded into the portfolio:
-detokenized ones from the manager's list, and tokenized ones through its ERC-721 enumeration. A
-tokenized HSI has to be detokenized before Hedron will mint against it, which the app says on
-the card.
+detokenized ones from the manager's list, and tokenized ones through its ERC-721 enumeration.
 
-Communis is deliberately absent on HSI stakes: every one of its mint functions reads
-`HEX.stakeLists(msg.sender, …)`, and an HSI's stake belongs to the HSI contract rather than to
-the wallet, so a holder can never claim one.
+A **tokenized** HSI cannot be minted against at all until it is detokenized: `mintInstanced`
+resolves the HSI through the manager's `hsiLists`, and `hexStakeTokenize` prunes it out of that
+list, so the call would revert. Its accrual is shown on the card and labelled, but it is not
+counted as mintable — the same treatment a loaned stake gets.
+
+Two of Communis's three bonuses are out of reach for an HSI, but **not all three**.
+`_mintStartBonus` and `_mintEndBonus` read `HEX.stakeLists(msg.sender, …)`, and an HSI's stake
+belongs to the HSI contract, so neither can ever be minted against one.
+`mintGoodAccountingBonus(address stakeOwner, …)` takes the owner as a *parameter*, so it does
+reach an HSI — meaning a stranger can take 1% of its max payout and force `stakeGoodAccounting()`
+on it once it is 38+ days past its end day. The app reads those records and warns about it.
 
 ### Verifying the two of them
 

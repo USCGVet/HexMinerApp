@@ -289,6 +289,20 @@ export async function loadChainSnapshot(chainId, addresses, settings, onProgress
     side = { error: e.message || String(e) };
   }
 
+  /*
+    HSI stakes are real HEX holdings that feed principal, interest, T-shares and the
+    portfolio total. If they could not be read, the totals below are genuinely incomplete —
+    and a quietly smaller number is the one failure mode worth being loud about, because
+    nothing else on the page would look wrong.
+  */
+  const warnings = [];
+  const hsiFailure = side?.error || side?.hsiError;
+  if (hsiFailure) {
+    warnings.push(
+      `HSI stakes could not be read on ${chain.name} (${hsiFailure}). Any HEX held in them is missing from these totals.`
+    );
+  }
+
   // PulseChain also hosts the secondary DApps that mint against these same stakes.
   // Native stakes only: both address their claim slots through the caller's stakeLists.
   let tokens = null;
@@ -316,6 +330,7 @@ export async function loadChainSnapshot(chainId, addresses, settings, onProgress
     totals,
     tokens,
     side,
+    warnings,
     dailyData: dd,
     block: BigInt(block),
     rpcUrl: rpc.activeUrl,

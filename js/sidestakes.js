@@ -223,8 +223,13 @@ export function comStartBonus({ stakedDays, lockedDay, maxPayout, stakesOriginal
 /**
  * Everything Communis will and will not pay for one stake, mirroring each mint
  * function's require()s.
+ *
+ * @param hsiOwned the stake belongs to an HSI contract rather than to the wallet.
+ *   _mintStartBonus and _mintEndBonus both read memoryStake(msg.sender, …), so neither is
+ *   reachable for one. mintGoodAccountingBonus is the exception — it takes stakeOwner as a
+ *   parameter, so it works against an HSI's stake and anyone may call it.
  */
-export function comStakeState(stake, paid, globals) {
+export function comStakeState(stake, paid, globals, { hsiOwned = false } = {}) {
   const { currentDay, shareRate } = globals;
   const s = {
     stakedHearts: stake.principal,
@@ -237,14 +242,18 @@ export function comStakeState(stake, paid, globals) {
   const graceEnd = dueDay + COM_END_GRACE_DAYS;
   const enoughShares = stake.shares > COM_MIN_SHARES;
 
+  const ownerBound = { status: 'ineligible', amount: 0n, reason: 'only the HSI contract itself could mint this' };
+
   // ---- start bonus
   let start;
-  if (paid.start > 0n) {
+  if (hsiOwned) {
+    start = { ...ownerBound };
+  } else if (paid.start > 0n) {
     start = { status: 'minted', amount: paid.start, reason: null };
   } else if (paid.end > 0n) {
     start = { status: 'blocked', amount: 0n, reason: 'end bonus already minted' };
   } else if (!enoughShares) {
-    start = { status: 'ineligible', amount: 0n, reason: 'needs more than 10,000 shares' };
+    start = { status: 'ineligible', amount: 0n, reason: 'needs at least 10,000 shares' };
   } else if (stake.stakedDays <= 179n) {
     start = { status: 'ineligible', amount: 0n, reason: 'needs a term of at least 180 days' };
   } else if (currentDay < stake.lockedDay) {
@@ -263,10 +272,12 @@ export function comStakeState(stake, paid, globals) {
 
   // ---- end bonus: a hard 37-day window after the term, then gone for good
   let end;
-  if (paid.end > 0n) {
+  if (hsiOwned) {
+    end = { ...ownerBound };
+  } else if (paid.end > 0n) {
     end = { status: 'minted', amount: paid.end, reason: null };
   } else if (!enoughShares) {
-    end = { status: 'ineligible', amount: 0n, reason: 'needs more than 10,000 shares' };
+    end = { status: 'ineligible', amount: 0n, reason: 'needs at least 10,000 shares' };
   } else if (stake.stakedDays <= 364n) {
     end = { status: 'ineligible', amount: 0n, reason: 'needs a term of at least 365 days' };
   } else if (currentDay < dueDay) {
@@ -285,7 +296,7 @@ export function comStakeState(stake, paid, globals) {
   } else if (paid.end > 0n) {
     good = { status: 'blocked', amount: 0n, reason: 'end bonus already minted' };
   } else if (!enoughShares) {
-    good = { status: 'ineligible', amount: 0n, reason: 'needs more than 10,000 shares' };
+    good = { status: 'ineligible', amount: 0n, reason: 'needs at least 10,000 shares' };
   } else if (stake.unlockedDay !== 0n) {
     good = { status: 'blocked', amount: 0n, reason: 'stake is already unlocked' };
   } else if (currentDay <= graceEnd) {
@@ -295,7 +306,18 @@ export function comStakeState(stake, paid, globals) {
     good = { status: 'claimable-by-anyone', amount: pr.maxPayout / 100n, reason: null };
   }
 
-  return { maxPayout: pr.maxPayout, start, end, good };
+  /*
+    Start and end are NOT additive. _mintEndBonus pays maxPayout - stakeIdStartBonusPayout,
+    so minting the start bonus first reduces the end bonus one for one and the pair together
+    can never exceed maxPayout. Whenever the end bonus is reachable its amount already IS
+    the whole remaining ceiling, so that is the figure a total may count; adding the start
+    bonus on top would promise COM that cannot exist.
+  */
+  const bestNow =
+    end.status === 'ready' ? end.amount : start.status === 'ready' ? start.amount : 0n;
+  const sharesCeiling = end.status === 'ready' && start.status === 'ready';
+
+  return { maxPayout: pr.maxPayout, bestNow, sharesCeiling, start, end, good };
 }
 
 /** _mintStakeBonus — what staked COM has accrued, in 91-day chunks. */
@@ -340,7 +362,13 @@ export async function loadSideStakes(rpc, chainId, block, addresses, stakes, glo
   for (const t of tokens) {
     const pair = t.pairs[chainId];
     priceIdx[t.key] = calls.length;
-    calls.push(mc(pair.address, callNoArgs(SEL.token0)), mc(pair.address, callNoArgs(SEL.getReserves)));
+    // Both sides are read so the HEX-quote assumption below can be checked rather than
+    // assumed, in either token ordering.
+    calls.push(
+      mc(pair.address, callNoArgs(SEL.token0)),
+      mc(pair.address, callNoArgs(SEL.token1)),
+      mc(pair.address, callNoArgs(SEL.getReserves))
+    );
   }
 
   const balIdx = {};
@@ -390,9 +418,25 @@ export async function loadSideStakes(rpc, chainId, block, addresses, stakes, glo
   for (const t of tokens) {
     const i = priceIdx[t.key];
     const blank = { usd: null, hexPer: null, liquidityUsd: null, reserveToken: null, reserveHex: null, lastTradeAt: null };
-    if (!r[i]?.success || !r[i + 1]?.success || hexUsd == null) { prices[t.key] = blank; continue; }
-    const isToken0 = decodeAddress(r[i].data).toLowerCase() === t.address.toLowerCase();
-    const res = decodeReserves(r[i + 1].data);
+    if (!r[i]?.success || !r[i + 1]?.success || !r[i + 2]?.success || hexUsd == null) {
+      prices[t.key] = blank;
+      continue;
+    }
+    const token0 = decodeAddress(r[i].data).toLowerCase();
+    const token1 = decodeAddress(r[i + 1].data).toLowerCase();
+    const self = t.address.toLowerCase();
+    const hex = HEX_ADDRESS.toLowerCase();
+    const isToken0 = token0 === self;
+    /*
+      Everything below converts through HEX, so the pair really must be TOKEN/HEX. A stale
+      or mistyped address, or a pool that has since been replaced, would otherwise divide by
+      some unrelated token's reserve and present the result as a price. Refusing to quote is
+      the honest outcome; a fabricated number is not.
+    */
+    const paired = isToken0 ? token1 : token0;
+    if ((token0 !== self && token1 !== self) || paired !== hex) { prices[t.key] = blank; continue; }
+
+    const res = decodeReserves(r[i + 2].data);
     const tokRes = isToken0 ? res.reserve0 : res.reserve1;
     const hexRes = isToken0 ? res.reserve1 : res.reserve0;
     if (tokRes === 0n || hexRes === 0n) { prices[t.key] = { ...blank, liquidityUsd: 0 }; continue; }
@@ -452,10 +496,19 @@ export async function loadSideStakes(rpc, chainId, block, addresses, stakes, glo
     }));
   });
 
-  // ---------------- passes 2 and 3: walk the HSI inventory
-  const hsiStakes = await loadHsiStakes(
-    rpc, block, addresses, r, hsiCountIdx, globals, mintMultiplier, hdrnDay, onProgress
-  );
+  // ---------------- walk the HSI inventory
+  //
+  // Kept in its own failure domain: HSI stakes are real HEX holdings that feed the
+  // portfolio totals, and they are discovered through the HSI manager with no dependence
+  // on Hedron or Communis state. A price or mint read falling over must not silently take
+  // a wallet's stakes with it.
+  let hsiStakes = [];
+  let hsiError = null;
+  try {
+    hsiStakes = await loadHsiStakes(rpc, block, addresses, r, hsiCountIdx, onProgress);
+  } catch (e) {
+    hsiError = e.message || String(e);
+  }
 
   return {
     chainId,
@@ -467,6 +520,7 @@ export async function loadSideStakes(rpc, chainId, block, addresses, stakes, glo
     comStaking,
     byStake,
     hsiStakes,
+    hsiError,
     totals: summarise(byStake, hsiStakes, comStaking, prices),
   };
 }
@@ -483,19 +537,29 @@ function buildStakeEntry(stake, { share, paid, globals, mintMultiplier, hdrnDay,
   const minted = share?.stakeId === stake.stakeId ? share.mintedDays : 0n;
   const launchBonus = share?.stakeId === stake.stakeId ? share.launchBonus : 0n;
   const isLoaned = share?.stakeId === stake.stakeId ? share.isLoaned : false;
+  const needsDetokenize = isHsi && stake.tokenized === true;
 
-  const mintable = isLoaned
-    ? 0n
-    : hdrnMintable({
-        shares: stake.shares,
-        lockedDay: stake.lockedDay,
-        stakedDays: stake.stakedDays,
-        hexCurrentDay: globals.currentDay,
-        mintedDays: minted,
-        launchBonus,
-        mintMultiplier,
-        hdrnDay,
-      });
+  // What the stake has accrued, whether or not it can be collected in its current state.
+  const accrued = hdrnMintable({
+    shares: stake.shares,
+    lockedDay: stake.lockedDay,
+    stakedDays: stake.stakedDays,
+    hexCurrentDay: globals.currentDay,
+    mintedDays: minted,
+    launchBonus,
+    mintMultiplier,
+    hdrnDay,
+  });
+
+  /*
+    Two preconditions block a mint outright, and both would make the transaction revert:
+    mintInstanced requires the HSI to still be in the manager's hsiLists, which
+    hexStakeTokenize prunes it out of, and it refuses a loaned stake. Neither loses the
+    accrual — the owner can clear both — but "mintable now" must not count either, or the
+    totals promise HDRN that no call can currently produce.
+  */
+  const blockedBy = isLoaned ? 'loaned' : needsDetokenize ? 'tokenized' : null;
+  const mintable = blockedBy ? 0n : accrued;
 
   let servedDays = globals.currentDay > stake.lockedDay ? globals.currentDay - stake.lockedDay : 0n;
   if (servedDays > stake.stakedDays) servedDays = stake.stakedDays;
@@ -503,17 +567,21 @@ function buildStakeEntry(stake, { share, paid, globals, mintMultiplier, hdrnDay,
   return {
     isHsi,
     hedron: {
+      accrued,
       mintable,
+      blockedBy,
       mintedDays: minted,
       unmintedDays: servedDays > minted ? servedDays - minted : 0n,
       launchBonus,
       isLoaned,
       // Nothing is lost by waiting — unlike a one-shot claim, the days keep accruing.
-      status: isLoaned ? 'loaned' : mintable > 0n ? 'ready' : 'nothing-yet',
+      status: blockedBy || (mintable > 0n ? 'ready' : 'nothing-yet'),
       // A tokenized HSI has to be detokenized before Hedron will mint against it.
-      needsDetokenize: isHsi && stake.tokenized === true,
+      needsDetokenize,
     },
-    communis: isHsi ? null : comStakeState(stake, paid, globals),
+    // An HSI stake still gets a Communis state: the good-accounting bonus reaches it even
+    // though the start and end bonuses do not.
+    communis: comStakeState(stake, paid, globals, { hsiOwned: isHsi }),
   };
 }
 
@@ -527,7 +595,7 @@ export function attachHsiEntries(side, derivedHsiStakes, globals) {
     const src = side.hsiStakes.find((h) => h.hsiAddress === d.hsiAddress);
     side.byStake.set(`${d.owner}:${d.index}`, buildStakeEntry(d, {
       share: src?.share ?? null,
-      paid: { start: 0n, end: 0n, good: 0n },
+      paid: src?.paid ?? { start: 0n, end: 0n, good: 0n },
       globals,
       mintMultiplier: side.mintMultiplier,
       hdrnDay: side.hdrnDay,
@@ -545,7 +613,7 @@ export function attachHsiEntries(side, derivedHsiStakes, globals) {
  * Tokenized ones are ERC-721s, so the token id has to be resolved to an HSI address
  * first — and Hedron cannot mint against them until they are detokenized.
  */
-async function loadHsiStakes(rpc, block, addresses, r, hsiCountIdx, globals, mintMultiplier, hdrnDay, onProgress) {
+async function loadHsiStakes(rpc, block, addresses, r, hsiCountIdx, onProgress) {
   const okUint = (i) => (r[i]?.success ? decodeUint(r[i].data) : 0n);
 
   const slots = [];
@@ -611,6 +679,24 @@ async function loadHsiStakes(rpc, block, addresses, r, hsiCountIdx, globals, min
       share: shareRes?.success ? decodeShare(shareRes.data) : null,
     });
   });
+  if (!out.length) return out;
+
+  // pass 5: Communis records for these stake ids. The good-accounting bonus reaches an
+  // HSI stake, and it is gated on no end bonus having been minted, so both are needed —
+  // without them an already-taken bonus would render as still claimable.
+  const p5 = [];
+  for (const h of out) {
+    p5.push(mc(COMMUNIS_ADDRESS, S.goodAcctPaid + padWord(h.raw.stakeId)));
+    p5.push(mc(COMMUNIS_ADDRESS, S.endBonusPaid + padWord(h.raw.stakeId)));
+  }
+  const r5 = await rpc.multicallChunked(p5, { block, chunk: 50 });
+  out.forEach((h, k) => {
+    h.paid = {
+      start: 0n, // unreachable for an HSI: _mintStartBonus is bound to msg.sender
+      good: r5[k * 2]?.success ? decodeUint(r5[k * 2].data) : 0n,
+      end: r5[k * 2 + 1]?.success ? decodeUint(r5[k * 2 + 1].data) : 0n,
+    };
+  });
   return out;
 }
 
@@ -621,11 +707,12 @@ function summarise(byStake, hsiStakes, comStaking, prices) {
   let expiringCount = 0;
 
   for (const e of byStake.values()) {
+    // mintable, not accrued: a loaned or tokenized stake would revert the mint today.
     hdrnMintableTotal += e.hedron.mintable;
-    if (!e.communis) continue; // HSI stakes cannot mint Communis at all
-    if (e.communis.start.status === 'ready') comReady += e.communis.start.amount;
+    if (!e.communis) continue;
+    // bestNow, not start + end: the two share one maxPayout ceiling.
+    comReady += e.communis.bestNow;
     if (e.communis.end.status === 'ready') {
-      comReady += e.communis.end.amount;
       comExpiringSoon += e.communis.end.amount;
       expiringCount++;
     }

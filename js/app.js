@@ -3,7 +3,7 @@
 import { CHAINS, loadSettings, saveSettings, isAddress, normalize } from './config.js';
 import { loadChainSnapshot, loadMarketExtras, loadPairExtras } from './hexdata.js';
 import { heartsToHex, sharesToTShares, BIG_PAY_DAY } from './hexmath.js';
-import { PULSE_TOKENS, TOKENS_CHAIN_ID, stakeTokens } from './tokens.js';
+import { PULSE_TOKENS, TOKENS_CHAIN_ID, stakeTokens, priceQuality } from './tokens.js';
 import { SIDE_TOKENS } from './sidestakes.js';
 import { renderTokenCard } from './tokencard.js';
 import { urlAddresses, isViewing, renderViewBanner, cleanUrl } from './urlview.js';
@@ -314,6 +314,18 @@ function buildNotices() {
         { label: 'HexRewards', href: PULSE_TOKENS.HXR.app },
         { label: 'Savant', href: PULSE_TOKENS.SAVANT.app },
       ],
+    });
+  }
+
+  // A partial load understates the portfolio without looking wrong, so it gets a notice of
+  // its own rather than only a line inside the side-stakes card.
+  const incomplete = activeChains().flatMap((id) => state.snapshots[id].warnings || []);
+  if (incomplete.length) {
+    out.push({
+      severity: 'warn',
+      icon: '⚠',
+      title: 'These totals are incomplete',
+      body: incomplete.map(esc).join('<br>') + '<br>Refresh to try again.',
     });
   }
 
@@ -779,9 +791,9 @@ function sideMintRows(s) {
   const rows = [];
   const h = e.hedron;
 
-  const hBadge = h.isLoaned
+  const hBadge = h.blockedBy === 'loaned'
     ? '<span class="mint-pill blocked">loaned</span>'
-    : h.needsDetokenize
+    : h.blockedBy === 'tokenized'
     ? '<span class="mint-pill warn">detokenize first</span>'
     : h.mintable > 0n
     ? '<span class="mint-pill ready">ready</span>'
@@ -795,32 +807,30 @@ function sideMintRows(s) {
   if (h.launchBonus > 0n) {
     hFlags.push(`<span class="mint-flag good" title="This stake was registered during Hedron's first 100 days, which permanently multiplies every mint against it.">launch bonus ${launchMultiple(h.launchBonus)}×</span>`);
   }
-  if (h.needsDetokenize) {
-    hFlags.push('<span class="mint-flag warn" title="Hedron mints against an HSI through the manager\'s list, which a tokenized HSI has left. Detokenize it to mint.">tokenized — detokenize to mint</span>');
+  if (h.blockedBy === 'tokenized') {
+    hFlags.push('<span class="mint-flag warn" title="mintInstanced resolves an HSI through the manager\'s hsiLists, and tokenizing removes it from that list, so the call would revert. Detokenize to mint. The accrual is not lost.">tokenized — detokenize to mint</span>');
   }
-  if (h.isLoaned) {
+  if (h.blockedBy === 'loaned') {
     hFlags.push('<span class="mint-flag bad">borrowed against; repay the loan to mint again</span>');
   }
+
+  // Blocked stakes show what they have accrued, clearly labelled as not mintable in this
+  // state — the totals above count only what a call would actually pay out today.
+  const hAmount = h.mintable > 0n
+    ? fmtSide(h.mintable, 'HDRN')
+    : h.blockedBy && h.accrued > 0n
+    ? `<span class="muted" title="Accrued but not mintable while ${esc(h.blockedBy)}. Not counted in the totals.">${fmtSide(h.accrued, 'HDRN')} accrued</span>`
+    : '—';
 
   rows.push(`<div class="mint-row" style="--accent:${SIDE_TOKENS.HDRN.accent}">
     <span class="mint-name">HDRN</span>
     ${hBadge}
-    <span class="mint-amt">${h.mintable > 0n ? fmtSide(h.mintable, 'HDRN') : '—'}</span>
+    <span class="mint-amt">${hAmount}</span>
     ${hFlags.length ? `<div class="mint-flags">${hFlags.join('')}</div>` : ''}
   </div>`);
 
-  // Communis reads the caller's own stakeLists, which an HSI stake is not part of.
-  if (!e.communis) {
-    rows.push(`<div class="mint-row muted-row" style="--accent:${SIDE_TOKENS.COM.accent}">
-      <span class="mint-name">COM</span>
-      <span class="mint-pill blocked">n/a</span>
-      <span class="mint-amt">—</span>
-      <div class="mint-flags"><span class="mint-flag">Communis mints from your own stake list, so an HSI stake cannot claim it</span></div>
-    </div>`);
-    return rows.join('');
-  }
-
   const c = e.communis;
+  if (!c) return rows.join('');
   const badgeFor = (b) => ({
     ready: '<span class="mint-pill ready">ready</span>',
     minted: '<span class="mint-pill done">minted</span>',
@@ -844,17 +854,44 @@ function sideMintRows(s) {
     </div>`;
   };
 
-  rows.push(comRow('start bonus', c.start, c.start.status === 'ready'
-    ? '<span class="mint-flag warn" title="The start bonus is scaled by this stake\'s original share rate over the current global share rate. HEX\'s share rate only rises, so this shrinks every day.">shrinks as HEX\'s share rate rises</span>'
-    : ''));
+  // On an HSI stake the start and end bonuses are structurally unreachable — both mint
+  // functions read the caller's own stakeLists — so their rows are noise. The
+  // good-accounting bonus is not: it takes the stake owner as a parameter and does reach
+  // an HSI, which is exactly the case worth surfacing.
+  if (s.isHsi) {
+    rows.push(`<div class="mint-row muted-row" style="--accent:${SIDE_TOKENS.COM.accent}">
+      <span class="mint-name">COM</span>
+      <span class="mint-pill blocked">n/a</span>
+      <span class="mint-amt">—</span>
+      <span class="mint-best">start &amp; end bonus</span>
+      <div class="mint-flags"><span class="mint-flag" title="_mintStartBonus and _mintEndBonus both read HEX.stakeLists(msg.sender, …), and an HSI's stake belongs to the HSI contract, so neither can ever be minted against one.">only the HSI contract itself could mint these</span></div>
+    </div>`);
+  } else {
+    rows.push(comRow('start bonus', c.start, c.start.status === 'ready'
+      ? '<span class="mint-flag warn" title="The start bonus is scaled by this stake\'s original share rate over the current global share rate. HEX\'s share rate only rises, so this shrinks every day.">shrinks as HEX\'s share rate rises</span>'
+      : ''));
 
-  rows.push(comRow('end bonus', c.end, c.end.status === 'ready'
-    ? `<span class="mint-flag warn" title="Communis allows 37 days after the term ends, then the end bonus can never be minted.">${c.end.daysLeft} day${c.end.daysLeft === 1n ? '' : 's'} left in the 37-day window</span>`
-    : ''));
+    rows.push(comRow('end bonus', c.end, c.end.status === 'ready'
+      ? `<span class="mint-flag warn" title="Communis allows 37 days after the term ends, then the end bonus can never be minted.">${c.end.daysLeft} day${c.end.daysLeft === 1n ? '' : 's'} left in the 37-day window</span>`
+      : ''));
+
+    // Minting the start bonus reduces the end bonus one for one, so the rows above are
+    // alternatives rather than a sum. Say so where both are live.
+    if (c.sharesCeiling) {
+      rows.push(`<div class="mint-row muted-row" style="--accent:${SIDE_TOKENS.COM.accent}">
+        <span class="mint-name"></span>
+        <span class="mint-amt">${fmtSide(c.bestNow, 'COM')}</span>
+        <span class="mint-best">most this stake can still mint</span>
+        <div class="mint-flags"><span class="mint-flag" title="The end bonus pays maxPayout minus whatever the start bonus already paid, so minting both totals maxPayout — never the sum of the two rows above.">start and end share one ceiling, they do not add</span></div>
+      </div>`);
+    }
+  }
 
   if (c.good.status !== 'waiting' && c.good.status !== 'ineligible') {
     rows.push(comRow('good accounting bonus', c.good, c.good.status === 'claimable-by-anyone'
-      ? '<span class="mint-flag bad" title="Communis pays 1% of maxPayout to whoever calls mintGoodAccountingBonus on this stake — anyone, not just you. The call runs HEX stakeGoodAccounting() as a side effect.">a stranger can claim this and unlock your stake</span>'
+      ? `<span class="mint-flag bad" title="Communis pays 1% of maxPayout to whoever calls mintGoodAccountingBonus(stakeOwner, index, id) — the owner is a parameter, not msg.sender, so anyone can call it${
+          s.isHsi ? ', including against an HSI' : ''
+        }. The call runs HEX stakeGoodAccounting() as a side effect.">a stranger can claim this and unlock ${s.isHsi ? 'this HSI' : 'your stake'}</span>`
       : ''));
   }
 
@@ -1018,10 +1055,18 @@ function renderSideTokens() {
       const bal = side.balances[cfg.key];
       const mintable = cfg.key === 'HDRN' ? side.totals.hdrnMintable : side.totals.comReady;
       const balUsd = price.usd == null ? null : (Number(bal) / 10 ** cfg.decimals) * price.usd;
+      // Same qualification every other token on the page gets: these pools are small
+      // enough that the quote is not really a market price.
+      const q = priceQuality(price);
+      const flag = q.thin
+        ? '<span class="mint-flag warn" title="This pool is too shallow for the quote to mean much — a small trade moves it a long way.">thin</span>'
+        : q.stale
+        ? '<span class="mint-flag warn" title="No trade in this pool for days, so the quote is stale.">stale</span>'
+        : '';
       rows.push(`<tr>
         <td><span class="tok-dot" style="background:${cfg.accent}"></span> ${esc(cfg.symbol)}</td>
         <td><span class="chain-tag">${esc(CHAINS[id].short)}</span></td>
-        <td class="mono">${fmtPrice(price.usd)}</td>
+        <td class="mono">${fmtPrice(price.usd)} ${flag}</td>
         <td class="mono">${fmtSide(bal, cfg.key)}${balUsd != null ? ` <span class="usd">${fmtUsd(balUsd)}</span>` : ''}</td>
         <td class="mono ${mintable > 0n ? 'good' : 'muted'}">${mintable > 0n ? fmtSide(mintable, cfg.key) : '—'}</td>
         <td class="mono muted">${price.liquidityUsd == null ? '—' : fmtUsd(price.liquidityUsd)}</td>
