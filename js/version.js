@@ -8,8 +8,8 @@
  * Bump APP_VERSION and BUILD_DATE together in the same commit that ships the change.
  */
 
-export const APP_VERSION = 'v2.1.0';
-export const BUILD_DATE = '2026-08-02';
+export const APP_VERSION = 'v2.2.0';
+export const BUILD_DATE = '2026-08-08';
 
 /**
  * Appended rather than written into the markup so the four footers stay free of anything

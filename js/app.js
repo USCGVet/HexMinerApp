@@ -5,6 +5,7 @@ import { loadChainSnapshot, loadMarketExtras, loadPairExtras } from './hexdata.j
 import { heartsToHex, sharesToTShares, BIG_PAY_DAY } from './hexmath.js';
 import { PULSE_TOKENS, TOKENS_CHAIN_ID, stakeTokens } from './tokens.js';
 import { renderTokenCard } from './tokencard.js';
+import { urlAddresses, isViewing, renderViewBanner, cleanUrl } from './urlview.js';
 import {
   esc, fmtHex, fmtHexCompact, fmtUsd, fmtPrice, fmtTShares, fmtPct,
   fmtDate, fmtDays, fmtTerm, shortAddr, fmtAgo, compact,
@@ -16,6 +17,9 @@ const fmtTok = (v, d = 5) =>
 
 const state = {
   settings: loadSettings(),
+  // Addresses named by the URL, if any. Kept separate from settings.addresses so that
+  // anything writing settings back to localStorage cannot pick up a link's addresses.
+  view: urlAddresses(),
   snapshots: {},   // chainId -> snapshot
   extras: {},      // chainId -> dexscreener (HEX)
   tokenExtras: {}, // token key -> dexscreener (HXR / SAVANT / JDAI / TKR)
@@ -32,9 +36,13 @@ let refreshTimer = null;
 
 // ---------------------------------------------------------------- loading
 
+/** A link's addresses win over the saved list for as long as the link is being followed. */
+const activeAddresses = () =>
+  state.view.length ? state.view : state.settings.addresses.map((a) => a.address);
+
 async function refresh() {
   if (state.loading) return;
-  const addrs = state.settings.addresses.map((a) => a.address);
+  const addrs = activeAddresses();
   if (!addrs.length) {
     renderEmpty();
     return;
@@ -149,7 +157,8 @@ const cmp_value = () => 0;
 // ---------------------------------------------------------------- render
 
 function render() {
-  if (!state.settings.addresses.length) return renderEmpty();
+  renderViewBanner(state.settings.addresses, trackViewed);
+  if (!activeAddresses().length) return renderEmpty();
   renderStatus();
   renderHero();
   renderNotices();
@@ -172,6 +181,9 @@ function mintFor(stake) {
   if (!p || stake.chainId !== TOKENS_CHAIN_ID) return null;
   return p.tk.mintByStake.get(`${stake.owner}:${stake.index}`) || null;
 }
+
+/** Served its term, so stakeEnd() could be called on it today — mints included. */
+const isFinished = (s) => s.status === 'matured' || s.status === 'late' || s.status === 'unlocked';
 
 /** Everything still mintable, and how much of it is on stakes that could be ended today. */
 function mintSummary() {
@@ -198,7 +210,7 @@ function mintSummary() {
     if (m.HXR.atRisk) hxr += m.HXR.rewardNow;
     if (m.SAVANT.atRisk) sav += m.SAVANT.rewardNow;
     // A finished stake is one transaction away from being gone, taking the mint with it.
-    if (risky && (s.status === 'matured' || s.status === 'late')) {
+    if (risky && isFinished(s)) {
       urgentStakes.add(s.index);
       if (m.HXR.atRisk) urgentHxr += m.HXR.rewardNow;
       if (m.SAVANT.atRisk) urgentSav += m.SAVANT.rewardNow;
@@ -224,6 +236,7 @@ function buildNotices() {
   const stakes = activeChains().flatMap((id) => state.snapshots[id].stakes.map((s) => ({ ...s, chainId: id })));
   const ready = stakes.filter((s) => s.status === 'matured');
   const late = stakes.filter((s) => s.status === 'late');
+  const settled = stakes.filter((s) => s.goodAccounted);
   const ms = mintSummary();
   const out = [];
 
@@ -245,6 +258,19 @@ function buildNotices() {
       icon: '✦',
       title: `${ready.length} stake${ready.length === 1 ? '' : 's'} finished the full term`,
       body: `Penalty-free to end${isFinite(graceLeft) && graceLeft > 0 ? ` for another ${fmtDays(graceLeft)}` : ''}.`,
+    });
+  }
+
+  if (settled.length) {
+    const frozenPenalty = settled.reduce((a, s) => a + s.penalty, 0n);
+    out.push({
+      severity: 'good',
+      icon: '❄',
+      title: `${settled.length} stake${settled.length === 1 ? ' has' : 's have'} already run good accounting`,
+      body: `Unlocked and out of the share pool, so the payout${
+        frozenPenalty > 0n ? ` and the ${fmtHex(frozenPenalty)} HEX late penalty are` : ' is'
+      } frozen — ending ${settled.length === 1 ? 'it' : 'them'} can wait with nothing more to lose.
+             ${settled.length === 1 ? 'It also qualifies' : 'They also qualify'} for the HexRewards full-term bonus.`,
     });
   }
 
@@ -375,9 +401,21 @@ function renderEmpty() {
         <button class="btn" id="connectBtn">Connect wallet</button>
       </div>
       <p class="muted small">Read-only. This app never requests a signature or a transaction.</p>
+      <p class="muted small">Any address can also be opened straight from the URL —
+         <code class="mono">?a=0x…</code> — without saving it here.</p>
     </div>`;
   $('connectBtn')?.addEventListener('click', connectWallet);
   renderStatus();
+}
+
+/** Adopt a link's address into the saved list, then step off the link. */
+function trackViewed(addresses) {
+  for (const a of addresses) {
+    if (state.settings.addresses.some((x) => x.address === a)) continue;
+    state.settings.addresses.push({ address: a, label: '' });
+  }
+  saveSettings(state.settings);
+  location.href = cleanUrl();
 }
 
 function renderStatus() {
@@ -436,6 +474,7 @@ function renderHero() {
             <option value="pending">Pending</option>
             <option value="matured">Matured</option>
             <option value="late">Late</option>
+            <option value="unlocked">Good accounting</option>
           </select>
           <select id="sortSel" aria-label="Sort stakes">
             <option value="value">Sort: value</option>
@@ -542,6 +581,9 @@ function renderStakes() {
   el.innerHTML = stakes.map(stakeCard).join('');
 }
 
+/** 'unlocked' is the state, "good accounting" is what everyone calls the call that causes it. */
+const STATUS_LABEL = { unlocked: 'good accounting' };
+
 function stakeCard(s) {
   const chain = CHAINS[s.chainId];
   const price = state.snapshots[s.chainId]?.price?.hexUsd;
@@ -553,6 +595,7 @@ function stakeCard(s) {
     active: `${fmtDays(s.daysLeft)} left`,
     matured: 'Ready to end',
     late: `${fmtDays(s.daysLate)} late`,
+    unlocked: `Settled ${fmtDate(s.unlockedDate)}${s.daysLate > 0n ? ` — ${fmtDays(s.daysLate)} late` : ''}`,
   }[s.status];
 
   const owner = state.settings.addresses.length > 1
@@ -569,7 +612,11 @@ function stakeCard(s) {
         ${s.isAutoStake ? '<span class="badge auto" title="Auto-stake from a BTC claim">auto</span>' : ''}
         ${owner}
       </div>
-      <span class="pill ${s.status}">${esc(s.status)}</span>
+      <span class="pill ${s.status}"${
+        s.goodAccounted
+          ? ` title="stakeGoodAccounting() has run on this stake (HEX day ${s.unlockedDay}). It left the share pool then, so interest, penalty and everything below are frozen at that day — nothing changes until it is ended."`
+          : ''
+      }>${esc(STATUS_LABEL[s.status] || s.status)}</span>
     </header>
 
     <div class="stake-progress">
@@ -603,17 +650,19 @@ function stakeCard(s) {
 
     <footer class="if-ended ${s.penalty > 0n ? 'has-penalty' : ''}">
       <div>
-        <div class="tile-label">If ended today</div>
+        <div class="tile-label">${s.goodAccounted ? 'Settled — pays out' : 'If ended today'}</div>
         <div class="net">${fmtHex(s.netIfEndedNow)} HEX ${usd(s.netIfEndedNow)}</div>
       </div>
       ${
         s.penalty > 0n
           ? `<div class="penalty" title="${
-              s.status === 'late'
+              s.goodAccounted
+                ? `Late-end penalty, frozen: 1/700th of the stake return for each of the ${s.daysLate} days between the grace period and the day good accounting ran. It cannot grow.`
+                : s.status === 'late'
                 ? 'Late-end penalty: 1/700th of the stake return for every day past the 14-day grace period'
                 : 'Early-end penalty: the contract confiscates interest over the penalty window (half the term, minimum 90 days)'
             }">
-               <div class="tile-label">Penalty</div>
+               <div class="tile-label">Penalty${s.goodAccounted ? ' (frozen)' : ''}</div>
                <div class="bad">−${fmtHex(s.penalty)}</div>
              </div>`
           : `<div class="penalty"><div class="tile-label">Penalty</div><div class="good">none</div></div>`
@@ -804,7 +853,9 @@ async function connectWallet() {
     }
     if (added) {
       saveSettings(state.settings);
-      refresh();
+      // Connecting a wallet is a request to see your own portfolio, so step off any link.
+      if (isViewing()) location.href = cleanUrl();
+      else refresh();
     } else {
       alert('That address is already being tracked.');
     }

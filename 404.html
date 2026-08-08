@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>HEX Miner</title>
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<script>
+/*
+  Pretty address links:  /0x81605CA8235f53C15DA90b769b67fB62339C5f5a
+
+  GitHub Pages serves static files with no rewrite rules, so that path has no file behind
+  it and Pages falls back to this page. Recognising the address here and handing it to
+  index.html as ?a= is the whole trick — it keeps the short form working as something
+  people can type or paste, with no server involved.
+
+  Runs before the body so the redirect happens without a flash of the not-found card.
+  Anything that is not an address falls through to that card instead.
+*/
+(function () {
+  var segs = decodeURIComponent(location.pathname).split('/');
+  var base = [];
+  var addrs = [];
+  for (var i = 0; i < segs.length; i++) {
+    // Addresses are the trailing segments; everything before them is the app's base path
+    // (a project site lives under /<repo>/, a user site at the root).
+    if (/^0x[0-9a-fA-F]{40}$/.test(segs[i])) addrs.push(segs[i]);
+    else if (!addrs.length) base.push(segs[i]);
+  }
+  if (!addrs.length) return;
+  var path = base.join('/');
+  if (path.charAt(path.length - 1) !== '/') path += '/';
+  location.replace(path + 'index.html?a=' + addrs.join(',') + location.search.replace(/^\?/, '&'));
+})();
+</script>
+<!-- Self-contained: this page can be served at any depth, so it cannot rely on a
+     stylesheet path the way the four real pages can. -->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #04060e;
+    color: #e8f1ff;
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-image:
+      radial-gradient(1200px 620px at 15% -10%, rgba(34, 211, 238, .16), transparent 62%),
+      radial-gradient(1000px 520px at 88% -4%, rgba(59, 130, 246, .15), transparent 62%);
+  }
+  .card {
+    max-width: 520px;
+    margin: 24px;
+    padding: 40px 32px;
+    text-align: center;
+    border: 1px solid #1b2942;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #0d1526, #0a1020);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+  }
+  .mark { font-size: 30px; color: #22d3ee; text-shadow: 0 0 22px rgba(34, 211, 238, .7); }
+  h1 { margin: 10px 0 12px; font-size: 23px; letter-spacing: .3px; }
+  p { color: #7e93b5; margin: 0 0 10px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #22d3ee; font-size: 12.5px; }
+  a {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 9px 16px;
+    border: 1px solid #24406b;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #0d1526, #0a1020);
+    color: #e8f1ff;
+    font-weight: 600;
+    font-size: 13.5px;
+    text-decoration: none;
+  }
+  a:hover { border-color: #22d3ee; box-shadow: 0 0 16px rgba(34, 211, 238, .3); }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="mark" aria-hidden="true">⬢</div>
+  <h1>Page not found</h1>
+  <p>To open a HEX account, put its address in the URL — either
+     <code>/0x…</code> or <code>index.html?a=0x…</code>.</p>
+  <!-- Relative, so it lands on the app root whether this is a project site or a user site. -->
+  <a href="./">Go to the portfolio</a>
+</div>
+
+</body>
+</html>

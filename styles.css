@@ -200,6 +200,39 @@ body > * { position: relative; z-index: 1; }
 
 .statusbar .sep { opacity: .35; }
 
+/* ---------------------------------------------------------------- viewing a link's address */
+
+/* Periwinkle rather than the usual cyan: this is a state you are temporarily in, not a
+   warning and not part of the dashboard proper. */
+.viewing {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  padding: 12px 16px;
+  border: 1px solid rgba(124, 157, 255, .32);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(124, 157, 255, .10), rgba(124, 157, 255, .04));
+  box-shadow: 0 0 22px rgba(124, 157, 255, .10);
+  font-size: 13.5px;
+}
+
+.viewing-icon { color: var(--laser-3); font-size: 16px; text-shadow: 0 0 10px rgba(124, 157, 255, .8); }
+.viewing-text { flex: 1 1 300px; }
+.viewing-text .mono { color: var(--laser-3); font-size: 12.5px; }
+.viewing-text .muted, .viewing-text .bad { display: block; font-size: 12.5px; margin-top: 2px; }
+.viewing-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  border-radius: 8px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
 .dot {
   width: 7px; height: 7px;
   border-radius: 50%;
@@ -765,9 +798,12 @@ select:hover { border-color: var(--laser); color: var(--laser); }
   box-shadow: 0 18px 40px rgba(0, 0, 0, .55), 0 0 24px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
-.stake.late    { --accent: var(--bad); }
-.stake.matured { --accent: var(--good); }
-.stake.pending { --accent: var(--dim); }
+.stake.late     { --accent: var(--bad); }
+.stake.matured  { --accent: var(--good); }
+.stake.pending  { --accent: var(--dim); }
+/* Settled by stakeGoodAccounting(): finished and safe, but not the same "act now" green
+   as a matured stake burning through its grace window. */
+.stake.unlocked { --accent: var(--laser-3); }
 
 .stake > header {
   display: flex;
@@ -814,6 +850,7 @@ select:hover { border-color: var(--laser); color: var(--laser); }
 .pill.matured { color: var(--good);  border-color: rgba(52, 229, 176, .45); background: rgba(52, 229, 176, .10); box-shadow: 0 0 12px rgba(52, 229, 176, .18); }
 .pill.late    { color: var(--bad);   border-color: rgba(255, 93, 125, .45); background: rgba(255, 93, 125, .10); box-shadow: 0 0 12px rgba(255, 93, 125, .18); }
 .pill.pending { color: var(--dim);   border-color: var(--line); background: rgba(255, 255, 255, .03); }
+.pill.unlocked { color: var(--laser-3); border-color: rgba(124, 157, 255, .45); background: rgba(124, 157, 255, .10); box-shadow: 0 0 12px rgba(124, 157, 255, .18); }
 
 .stake-progress { display: flex; align-items: center; gap: 15px; }
 

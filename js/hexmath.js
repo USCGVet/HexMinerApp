@@ -254,17 +254,34 @@ export function calcStakeShares(stakedHearts, stakedDays, shareRate) {
  *           'active'   — mid-term
  *           'matured'  — full term served, inside the 14-day grace window
  *           'late'     — full term served, past grace, losing value daily
+ *           'unlocked' — stakeGoodAccounting() has already run: settled and frozen
  */
 export function deriveStake(g, dd, stake, index) {
   const { stakedHearts, stakeShares, lockedDay, stakedDays } = stake;
   const currentDay = g.currentDay;
   const endDay = lockedDay + stakedDays;
 
+  /*
+    stakeGoodAccounting() only runs on a fully served stake, and it settles that stake on
+    the spot: the shares leave the pool, the payout stops growing, and unlockedDay is
+    written to storage. _stakeEnd() then takes its prevUnlocked branch, which serves the
+    full term and hands the STORED unlockedDay to _calcLatePenalty.
+
+    So for an unlocked stake the penalty is whatever it was on the day good accounting
+    ran and can never grow again. Measuring it against currentDay instead — as this did —
+    invents a penalty that the contract will never charge: a stake unlocked on its end day
+    is penalty-free forever, but a year later that reading shows ~52% of it confiscated.
+  */
+  const unlockedDay = stake.unlockedDay ?? 0n;
+  const goodAccounted = unlockedDay !== 0n;
+
   const started = currentDay >= lockedDay;
-  let servedDays = started ? currentDay - lockedDay : 0n;
+  let servedDays = goodAccounted ? stakedDays : started ? currentDay - lockedDay : 0n;
   if (servedDays > stakedDays) servedDays = stakedDays;
 
-  const perf = stakePerformance(g, dd, stake, servedDays, currentDay);
+  // The day the late penalty is measured against: frozen once unlocked, otherwise today,
+  // which is what "if I ended it right now" means for a stake still in the pool.
+  const perf = stakePerformance(g, dd, stake, servedDays, goodAccounted ? unlockedDay : currentDay);
   const bigPayDay = calcBigPayDay(g, dd, stakeShares, lockedDay, lockedDay + servedDays);
   const interest = perf.payout;               // includes the BPD slice, as the contract does
   const baseInterest = interest - bigPayDay;  // day-by-day inflation share only
@@ -272,10 +289,16 @@ export function deriveStake(g, dd, stake, index) {
   const fullyServed = servedDays >= stakedDays;
   const graceEndDay = endDay + LATE_PENALTY_GRACE_DAYS;
   let status;
-  if (!started) status = 'pending';
+  if (goodAccounted) status = 'unlocked';
+  else if (!started) status = 'pending';
   else if (!fullyServed) status = 'active';
   else if (currentDay <= graceEndDay) status = 'matured';
   else status = 'late';
+
+  // How late the stake was/is against the grace window: fixed at the good-accounting day
+  // once unlocked, still climbing otherwise.
+  const lateAgainst = goodAccounted ? unlockedDay : currentDay;
+  const daysLate = fullyServed && lateAgainst > graceEndDay ? lateAgainst - graceEndDay : 0n;
 
   const progress = stakedDays === 0n ? 1 : Number(servedDays) / Number(stakedDays);
   const todayEstimate = status === 'active' || status === 'pending'
@@ -298,11 +321,13 @@ export function deriveStake(g, dd, stake, index) {
     stakedDays,
     // non-zero once stakeGoodAccounting() has unlocked the stake; the stake stays in
     // stakeLists, and HexRewards keys its bonus tier off this
-    unlockedDay: stake.unlockedDay,
+    unlockedDay,
+    goodAccounted,
+    unlockedDate: goodAccounted ? dayToDate(unlockedDay) : null,
     endDay,
     servedDays,
     daysLeft: fullyServed ? 0n : stakedDays - servedDays,
-    daysLate: status === 'late' ? currentDay - graceEndDay : 0n,
+    daysLate,
     // how long a matured stake can still be ended with no late penalty
     graceDaysLeft: status === 'matured' ? graceEndDay - currentDay : 0n,
     currentDay,

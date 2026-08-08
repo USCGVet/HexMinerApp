@@ -61,14 +61,21 @@ earned, and total T-shares.
 
 Anything that needs your attention lives behind the **bell** in the header rather than in
 banners across the top: stakes that have finished their term (penalty-free for 14 days), stakes
-past that grace period losing 1/700th of their return per day, unminted HXR/Savant, and stakes
-blocked by the HexRewards index bug. The bell takes the colour of the most severe notice — red
-for a warning, green for something ready, cyan for information — so urgency is still visible at
-a glance without a wall of text. Click, click-away, or Escape to dismiss.
+past that grace period losing 1/700th of their return per day, stakes already settled by
+`stakeGoodAccounting()`, unminted HXR/Savant, and stakes blocked by the HexRewards index bug.
+The bell takes the colour of the most severe notice — red for a warning, green for something
+ready, cyan for information — so urgency is still visible at a glance without a wall of text.
+Click, click-away, or Escape to dismiss.
 
 **Per stake** — principal, interest, Big Pay Day slice where it applies, T-shares, term,
 progress, start/end dates, realised yield, and *if ended today*: the exact net return and the
 exact penalty the contract would take.
+
+A stake with a non-zero `unlockedDay` has already had `stakeGoodAccounting()` called on it and
+is shown as **good accounting** rather than as late. That call settles the stake — shares leave
+the pool, the payout stops growing, and the late-end penalty is fixed at the day it ran — so the
+penalty is measured against the stored `unlockedDay`, exactly as `_stakeEnd()`'s `prevUnlocked`
+branch does. Measuring against today instead shows a penalty the contract will never charge.
 
 **Charts** — payout per T-share per day, cumulative HEX per T-share, total T-shares staked,
 and the daily payout pool. All from `dailyData`, so no price API or indexer is involved.
@@ -219,6 +226,29 @@ Everything lives in **Settings** and is stored only in your browser:
 - **Chains** — enable Ethereum, PulseChain, or both.
 - **RPC override** — optional per chain, tried first with the built-ins as fallback.
 
+### Opening an address from the URL
+
+Any address can be viewed straight from a link, with nothing saved:
+
+```
+https://…/0x81605CA8235f53C15DA90b769b67fB62339C5f5a
+https://…/index.html?a=0x81605CA8235f53C15DA90b769b67fB62339C5f5a
+https://…/index.html#0x81605CA8235f53C15DA90b769b67fB62339C5f5a
+```
+
+Several addresses can be listed at once, comma-separated, up to ten — they combine into one
+portfolio exactly as saved addresses do. A banner names whoever is being viewed, with one
+button to adopt the address into your own list and one to go back to your portfolio.
+
+A link **never** writes to your saved addresses: sharing a stake should not quietly replace
+what the recipient is tracking, so the URL applies to that page load only and adopting it is
+an explicit click. The address also rides along the Portfolio / Charts / JDAI nav links, but
+not to Settings, which edits the saved list a view link has nothing to do with.
+
+The bare `/0x…` form needs `404.html`. GitHub Pages has no rewrite rules, so a path with no
+file behind it falls back to that page, which recognises the address and forwards it to
+`index.html?a=…`. It is the only reason the file exists.
+
 ### Why public endpoints only
 
 Earlier versions routed Ethereum through a personal Azure Functions proxy. It does still work,
@@ -254,6 +284,7 @@ index.html        portfolio dashboard (HEX + stake-minted tokens)
 chart.html        protocol charts
 jdai.html         JDAI + Taker
 settings.html     addresses, chains, RPCs
+404.html          turns /0x… into index.html?a=0x… (GitHub Pages has no rewrites)
 styles.css        dark "blue laser" theme
 js/
   hexmath.js      contract arithmetic (the part that must be exact)
@@ -262,6 +293,7 @@ js/
   rpc.js          JSON-RPC failover + Multicall3 batching
   abi.js          minimal ABI codec, hardcoded selectors
   config.js       chains, addresses, settings store
+  urlview.js      address-in-the-URL parsing, banner and nav propagation
   charts.js       SVG line charts with hover
   format.js       display formatting
   version.js      version string, stamped into every footer at runtime

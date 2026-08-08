@@ -11,10 +11,12 @@ import {
   PULSE_TOKENS, jdaiTokens, jdaiTargetUsd, jdaiVaultStats, priceQuality, IMPACT_PROBE_USD,
 } from './tokens.js';
 import { renderTokenCard, priceFlag } from './tokencard.js';
+import { urlAddresses, renderViewBanner } from './urlview.js';
 import { esc, fmtUsd, fmtPrice, fmtPct, fmtAgo, fmtImpact, compact } from './format.js';
 
 const state = {
   settings: loadSettings(),
+  view: urlAddresses(),
   snap: null,
   tokenExtras: {},
   error: null,
@@ -30,7 +32,9 @@ async function refresh() {
   state.error = null;
   renderStatus();
 
-  const addrs = state.settings.addresses.map((a) => a.address);
+  // Same rule as the portfolio: a link's addresses win, the saved list is left alone.
+  const addrs = state.view.length ? state.view : state.settings.addresses.map((a) => a.address);
+  renderViewBanner(state.settings.addresses);
   try {
     state.snap = await loadTokensSnapshot(addrs, state.settings, (m) => {
       state.progress = m;
