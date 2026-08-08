@@ -8,7 +8,7 @@
  * Bump APP_VERSION and BUILD_DATE together in the same commit that ships the change.
  */
 
-export const APP_VERSION = 'v2.2.0';
+export const APP_VERSION = 'v2.3.0';
 export const BUILD_DATE = '2026-08-08';
 
 /**

@@ -35,11 +35,16 @@ export function fmtUsd(v) {
   return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
 
-/** Token prices go well below a cent, so keep significant digits instead of fixed ones. */
+/**
+ * Token prices go well below a cent, so keep significant digits instead of fixed ones.
+ * The ceiling has to clear Communis, which trades around 1e-12 — at 10 decimals that
+ * rounded to a row of zeros.
+ */
 export function fmtPrice(v) {
   if (v == null || !isFinite(v)) return '—';
   if (v >= 1) return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-  const digits = Math.max(4, Math.min(10, 2 - Math.floor(Math.log10(v))));
+  if (v === 0) return '$0.00';
+  const digits = Math.max(4, Math.min(16, 2 - Math.floor(Math.log10(v))));
   return '$' + v.toFixed(digits);
 }
 

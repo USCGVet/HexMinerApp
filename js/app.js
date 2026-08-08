@@ -4,6 +4,7 @@ import { CHAINS, loadSettings, saveSettings, isAddress, normalize } from './conf
 import { loadChainSnapshot, loadMarketExtras, loadPairExtras } from './hexdata.js';
 import { heartsToHex, sharesToTShares, BIG_PAY_DAY } from './hexmath.js';
 import { PULSE_TOKENS, TOKENS_CHAIN_ID, stakeTokens } from './tokens.js';
+import { SIDE_TOKENS } from './sidestakes.js';
 import { renderTokenCard } from './tokencard.js';
 import { urlAddresses, isViewing, renderViewBanner, cleanUrl } from './urlview.js';
 import {
@@ -14,6 +15,12 @@ import {
 /** Secondary tokens are 18-decimal; show enough digits for these small amounts. */
 const fmtTok = (v, d = 5) =>
   (Number(v) / 1e18).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+/**
+ * Hedron and Communis run to millions and billions of units respectively, so they get
+ * compact notation rather than the five decimal places HXR and Savant need.
+ */
+const fmtSide = (raw, key) => compact(Number(raw) / 10 ** SIDE_TOKENS[key].decimals);
 
 const state = {
   settings: loadSettings(),
@@ -53,39 +60,43 @@ async function refresh() {
   renderStatus();
 
   const chains = state.settings.enabledChains;
-  await Promise.all(
-    chains.map(async (id) => {
-      try {
-        state.snapshots[id] = await loadChainSnapshot(id, addrs, state.settings, (msg) => {
-          state.progress = { ...(state.progress || {}), [id]: msg };
-          renderStatus();
-        });
-        delete state.errors[id];
-      } catch (e) {
-        state.errors[id] = e.message || String(e);
-        delete state.snapshots[id];
-      }
-      render();
-    })
-  );
+  try {
+    await Promise.all(
+      chains.map(async (id) => {
+        try {
+          state.snapshots[id] = await loadChainSnapshot(id, addrs, state.settings, (msg) => {
+            state.progress = { ...(state.progress || {}), [id]: msg };
+            renderStatus();
+          });
+          delete state.errors[id];
+        } catch (e) {
+          state.errors[id] = e.message || String(e);
+          delete state.snapshots[id];
+        }
+        render();
+      })
+    );
 
-  // Non-blocking market enrichment: HEX per chain, plus the PulseChain secondary tokens.
-  Promise.all([
-    ...chains.map(async (id) => {
-      const ex = await loadMarketExtras(CHAINS[id]);
-      if (ex) state.extras[id] = ex;
-    }),
-    ...(chains.includes(TOKENS_CHAIN_ID)
-      ? Object.values(PULSE_TOKENS).map(async (t) => {
-          const ex = await loadPairExtras('pulsechain', t.dexscreenerPair);
-          if (ex) state.tokenExtras[t.key] = ex;
-        })
-      : []),
-  ]).then(render);
-
-  state.loading = false;
-  state.progress = null;
-  state.loadedAt = Date.now();
+    // Non-blocking market enrichment: HEX per chain, plus the PulseChain secondary tokens.
+    Promise.all([
+      ...chains.map(async (id) => {
+        const ex = await loadMarketExtras(CHAINS[id]);
+        if (ex) state.extras[id] = ex;
+      }),
+      ...(chains.includes(TOKENS_CHAIN_ID)
+        ? Object.values(PULSE_TOKENS).map(async (t) => {
+            const ex = await loadPairExtras('pulsechain', t.dexscreenerPair);
+            if (ex) state.tokenExtras[t.key] = ex;
+          })
+        : []),
+    ]).then(render);
+  } finally {
+    // A throw anywhere above — including inside render() — must not leave the app stuck
+    // showing a spinner with no way back. The error still surfaces; the load ends either way.
+    state.loading = false;
+    state.progress = null;
+    state.loadedAt = Date.now();
+  }
   render();
   scheduleAutoRefresh();
 }
@@ -165,6 +176,7 @@ function render() {
   renderChains();
   renderStakes();
   renderTokens();
+  renderSideTokens();
   renderProtocol();
 }
 
@@ -302,6 +314,68 @@ function buildNotices() {
         { label: 'HexRewards', href: PULSE_TOKENS.HXR.app },
         { label: 'Savant', href: PULSE_TOKENS.SAVANT.app },
       ],
+    });
+  }
+
+  // Communis end bonuses live for 37 days after a stake matures and then cannot ever be
+  // minted. That is the only hard deadline anywhere in this app, so it leads.
+  const expiring = [];
+  let hdrnTotal = 0n;
+  let hdrnUsd = 0;
+  const exposed = [];
+  for (const id of activeChains()) {
+    const side = state.snapshots[id].side;
+    if (!side || side.error) continue;
+    hdrnTotal += side.totals.hdrnMintable;
+    hdrnUsd += side.totals.hdrnMintableUsd || 0;
+    for (const [key, e] of side.byStake) {
+      if (!e.communis) continue;
+      if (e.communis.end.status === 'ready') {
+        expiring.push({ chainId: id, key, amount: e.communis.end.amount, daysLeft: e.communis.end.daysLeft });
+      }
+      if (e.communis.good.status === 'claimable-by-anyone') {
+        exposed.push({ chainId: id, key, amount: e.communis.good.amount });
+      }
+    }
+  }
+
+  if (expiring.length) {
+    const soonest = expiring.reduce((m, x) => (x.daysLeft < m ? x.daysLeft : m), 9999n);
+    const total = expiring.reduce((a, x) => a + x.amount, 0n);
+    out.push({
+      severity: 'warn',
+      icon: '⏳',
+      title: `${expiring.length} Communis end bonus${expiring.length === 1 ? '' : 'es'} expiring`,
+      body: `<b>${fmtSide(total, 'COM')} COM</b> can still be minted, but Communis allows only 37 days
+             after a stake matures — the soonest closes in <b>${fmtDays(soonest)}</b>. After that the
+             end bonus for that stake can never be minted by anyone.`,
+      links: [{ label: 'Communis', href: SIDE_TOKENS.COM.app }],
+    });
+  }
+
+  if (exposed.length) {
+    const total = exposed.reduce((a, x) => a + x.amount, 0n);
+    out.push({
+      severity: 'warn',
+      icon: '⚠',
+      title: `${exposed.length} stake${exposed.length === 1 ? '' : 's'} a stranger can unlock`,
+      body: `Past the 37-day window, Communis pays 1% of a stake's max payout —
+             <b>${fmtSide(total, 'COM')} COM</b> here — to <em>anyone</em> who calls
+             <code class="mono">mintGoodAccountingBonus()</code> on it. Doing so runs HEX
+             <code class="mono">stakeGoodAccounting()</code> on your stake as a side effect, which
+             freezes its late penalty. Claiming it yourself keeps both the bonus and the timing.`,
+      links: [{ label: 'Communis', href: SIDE_TOKENS.COM.app }],
+    });
+  }
+
+  if (hdrnTotal > 0n) {
+    out.push({
+      severity: 'info',
+      icon: '◈',
+      title: `${fmtSide(hdrnTotal, 'HDRN')} HDRN mintable`,
+      body: `Hedron pays per day served and keeps accruing, so nothing is lost by waiting —
+             but it is only reachable while the stake exists${hdrnUsd ? `. Worth about ${fmtUsd(hdrnUsd)} at the current pool quote` : ''}.`,
+      links: [{ label: 'Hedron', href: SIDE_TOKENS.HDRN.app }],
     });
   }
 
@@ -491,6 +565,7 @@ function renderHero() {
     </section>
 
     <section id="tokens"></section>
+    <section id="sideTokens"></section>
     <section id="protocol" class="card"></section>
   `;
 
@@ -590,13 +665,16 @@ function stakeCard(s) {
   const usd = (h) => (price == null ? '' : `<span class="usd">${fmtUsd(heartsToHex(h) * price)}</span>`);
   const pct = Math.round(s.progress * 100);
 
-  const statusText = {
-    pending: `Starts ${fmtDate(s.startDate)}`,
-    active: `${fmtDays(s.daysLeft)} left`,
-    matured: 'Ready to end',
-    late: `${fmtDays(s.daysLate)} late`,
-    unlocked: `Settled ${fmtDate(s.unlockedDate)}${s.daysLate > 0n ? ` — ${fmtDays(s.daysLate)} late` : ''}`,
-  }[s.status];
+  // Lazy on purpose: only the matching branch is evaluated. An object of plain strings
+  // would compute every branch for every stake, and unlockedDate is null unless the
+  // stake actually ran good accounting.
+  const statusText = ({
+    pending: () => `Starts ${fmtDate(s.startDate)}`,
+    active: () => `${fmtDays(s.daysLeft)} left`,
+    matured: () => 'Ready to end',
+    late: () => `${fmtDays(s.daysLate)} late`,
+    unlocked: () => `Settled ${fmtDate(s.unlockedDate)}${s.daysLate > 0n ? ` — ${fmtDays(s.daysLate)} late` : ''}`,
+  }[s.status] || (() => ''))();
 
   const owner = state.settings.addresses.length > 1
     ? `<span class="owner" title="${esc(s.owner)}">${esc(labelFor(s.owner))}</span>`
@@ -607,9 +685,16 @@ function stakeCard(s) {
     <header>
       <div class="stake-id">
         <span class="chain-tag">${esc(chain.short)}</span>
-        <span class="mono">#${s.index}</span>
+        <span class="mono">${s.isHsi ? 'HSI' : `#${s.index}`}</span>
         <span class="muted mono small">id ${s.stakeId}</span>
         ${s.isAutoStake ? '<span class="badge auto" title="Auto-stake from a BTC claim">auto</span>' : ''}
+        ${
+          s.isHsi
+            ? `<span class="badge hsi" title="A HEX Stake Instance: this stake is held by its own contract (${esc(s.hsiAddress)}) rather than in your wallet's stake list.${
+                s.tokenized ? ' It is currently tokenized as an NFT.' : ''
+              }">${s.tokenized ? 'HSI · NFT' : 'HSI'}</span>`
+            : ''
+        }
         ${owner}
       </div>
       <span class="pill ${s.status}"${
@@ -671,13 +756,127 @@ function stakeCard(s) {
   </article>`;
 }
 
+/** Hedron + Communis state for one stake. Unlike HXR/Savant, this exists on both chains. */
+function sideFor(stake) {
+  const side = state.snapshots[stake.chainId]?.side;
+  if (!side || side.error) return null;
+  return side.byStake.get(`${stake.owner}:${stake.index}`) || null;
+}
+
+/** How much a stored launch bonus multiplies a Hedron mint, e.g. 100 -> 11x. */
+const launchMultiple = (b) => 1 + Number(b) / 10;
+
+/**
+ * Hedron and Communis rows.
+ *
+ * These read differently from the HXR/Savant rows above them: Hedron is not a one-shot
+ * claim but an allowance that grows every day and is never used up, while Communis has
+ * three separate bonuses with their own windows — one of which expires for good.
+ */
+function sideMintRows(s) {
+  const e = sideFor(s);
+  if (!e) return '';
+  const rows = [];
+  const h = e.hedron;
+
+  const hBadge = h.isLoaned
+    ? '<span class="mint-pill blocked">loaned</span>'
+    : h.needsDetokenize
+    ? '<span class="mint-pill warn">detokenize first</span>'
+    : h.mintable > 0n
+    ? '<span class="mint-pill ready">ready</span>'
+    : '<span class="mint-pill">nothing yet</span>';
+
+  const hFlags = [];
+  if (h.unmintedDays > 0n) {
+    hFlags.push(`<span class="mint-flag" title="Hedron pays per day served. Minting banks the days so far; the rest keeps accruing, so nothing is lost by waiting.">${
+      h.unmintedDays} day${h.unmintedDays === 1n ? '' : 's'} unminted${h.mintedDays > 0n ? ` · ${h.mintedDays} already minted` : ''}</span>`);
+  }
+  if (h.launchBonus > 0n) {
+    hFlags.push(`<span class="mint-flag good" title="This stake was registered during Hedron's first 100 days, which permanently multiplies every mint against it.">launch bonus ${launchMultiple(h.launchBonus)}×</span>`);
+  }
+  if (h.needsDetokenize) {
+    hFlags.push('<span class="mint-flag warn" title="Hedron mints against an HSI through the manager\'s list, which a tokenized HSI has left. Detokenize it to mint.">tokenized — detokenize to mint</span>');
+  }
+  if (h.isLoaned) {
+    hFlags.push('<span class="mint-flag bad">borrowed against; repay the loan to mint again</span>');
+  }
+
+  rows.push(`<div class="mint-row" style="--accent:${SIDE_TOKENS.HDRN.accent}">
+    <span class="mint-name">HDRN</span>
+    ${hBadge}
+    <span class="mint-amt">${h.mintable > 0n ? fmtSide(h.mintable, 'HDRN') : '—'}</span>
+    ${hFlags.length ? `<div class="mint-flags">${hFlags.join('')}</div>` : ''}
+  </div>`);
+
+  // Communis reads the caller's own stakeLists, which an HSI stake is not part of.
+  if (!e.communis) {
+    rows.push(`<div class="mint-row muted-row" style="--accent:${SIDE_TOKENS.COM.accent}">
+      <span class="mint-name">COM</span>
+      <span class="mint-pill blocked">n/a</span>
+      <span class="mint-amt">—</span>
+      <div class="mint-flags"><span class="mint-flag">Communis mints from your own stake list, so an HSI stake cannot claim it</span></div>
+    </div>`);
+    return rows.join('');
+  }
+
+  const c = e.communis;
+  const badgeFor = (b) => ({
+    ready: '<span class="mint-pill ready">ready</span>',
+    minted: '<span class="mint-pill done">minted</span>',
+    expired: '<span class="mint-pill blocked">expired</span>',
+    blocked: '<span class="mint-pill blocked">blocked</span>',
+    ineligible: '<span class="mint-pill blocked">ineligible</span>',
+    waiting: '<span class="mint-pill">not yet</span>',
+    'claimable-by-anyone': '<span class="mint-pill warn">anyone can take</span>',
+  }[b.status] || '<span class="mint-pill"></span>');
+
+  const comRow = (label, b, extra = '') => {
+    const flags = [];
+    if (b.reason) flags.push(`<span class="mint-flag ${b.status === 'expired' ? 'bad' : ''}">${esc(b.reason)}</span>`);
+    if (extra) flags.push(extra);
+    return `<div class="mint-row" style="--accent:${SIDE_TOKENS.COM.accent}">
+      <span class="mint-name">COM</span>
+      ${badgeFor(b)}
+      <span class="mint-amt">${b.amount > 0n ? fmtSide(b.amount, 'COM') : '—'}</span>
+      <span class="mint-best">${esc(label)}</span>
+      ${flags.length ? `<div class="mint-flags">${flags.join('')}</div>` : ''}
+    </div>`;
+  };
+
+  rows.push(comRow('start bonus', c.start, c.start.status === 'ready'
+    ? '<span class="mint-flag warn" title="The start bonus is scaled by this stake\'s original share rate over the current global share rate. HEX\'s share rate only rises, so this shrinks every day.">shrinks as HEX\'s share rate rises</span>'
+    : ''));
+
+  rows.push(comRow('end bonus', c.end, c.end.status === 'ready'
+    ? `<span class="mint-flag warn" title="Communis allows 37 days after the term ends, then the end bonus can never be minted.">${c.end.daysLeft} day${c.end.daysLeft === 1n ? '' : 's'} left in the 37-day window</span>`
+    : ''));
+
+  if (c.good.status !== 'waiting' && c.good.status !== 'ineligible') {
+    rows.push(comRow('good accounting bonus', c.good, c.good.status === 'claimable-by-anyone'
+      ? '<span class="mint-flag bad" title="Communis pays 1% of maxPayout to whoever calls mintGoodAccountingBonus on this stake — anyone, not just you. The call runs HEX stakeGoodAccounting() as a side effect.">a stranger can claim this and unlock your stake</span>'
+      : ''));
+  }
+
+  return rows.join('');
+}
+
 /**
  * The HexRewards / Savant mint state for a single stake. Only PulseChain stakes can mint;
  * on Ethereum these contracts do not exist, so nothing is shown.
  */
 function mintBlock(s) {
   const m = mintFor(s);
-  if (!m) return '';
+  const side = sideMintRows(s);
+  if (!m) {
+    return side
+      ? `<div class="mint-block">
+           <div class="tile-label">Side stakes
+             <a class="mint-help" href="${esc(SIDE_TOKENS.HDRN.app)}" target="_blank" rel="noopener noreferrer">Hedron ↗</a>
+             <a class="mint-help" href="${esc(SIDE_TOKENS.COM.app)}" target="_blank" rel="noopener noreferrer">Communis ↗</a>
+           </div>${side}</div>`
+      : '';
+  }
   const rows = [PULSE_TOKENS.HXR, PULSE_TOKENS.SAVANT]
     .map((cfg) => {
       const e = m[cfg.key];
@@ -731,8 +930,11 @@ function mintBlock(s) {
     <div class="tile-label">Secondary mints
       <a class="mint-help" href="${esc(PULSE_TOKENS.HXR.app)}" target="_blank" rel="noopener noreferrer">HXR ↗</a>
       <a class="mint-help" href="${esc(PULSE_TOKENS.SAVANT.app)}" target="_blank" rel="noopener noreferrer">Savant ↗</a>
+      <a class="mint-help" href="${esc(SIDE_TOKENS.HDRN.app)}" target="_blank" rel="noopener noreferrer">Hedron ↗</a>
+      <a class="mint-help" href="${esc(SIDE_TOKENS.COM.app)}" target="_blank" rel="noopener noreferrer">Communis ↗</a>
     </div>
     ${rows}
+    ${side}
   </div>`;
 }
 
@@ -787,6 +989,98 @@ function renderTokens() {
       deliberately small: every token in existence was minted by someone staking HEX, one claim
       per stake, and tiers are capped at 369 stakes each.
     </p>`;
+}
+
+/**
+ * Hedron and Communis across both chains.
+ *
+ * Rendered as one table rather than as cards, because the story here is the comparison:
+ * the same two contracts, same addresses, running independently on Ethereum and
+ * PulseChain with their own supplies, prices and balances.
+ */
+function renderSideTokens() {
+  const el = $('sideTokens');
+  if (!el) return;
+
+  const ids = activeChains().filter((id) => state.snapshots[id]?.side);
+  if (!ids.length) {
+    el.innerHTML = '';
+    return;
+  }
+  const errored = ids.filter((id) => state.snapshots[id].side.error);
+  const live = ids.filter((id) => !state.snapshots[id].side.error);
+
+  const rows = [];
+  for (const cfg of Object.values(SIDE_TOKENS)) {
+    for (const id of live) {
+      const side = state.snapshots[id].side;
+      const price = side.prices[cfg.key];
+      const bal = side.balances[cfg.key];
+      const mintable = cfg.key === 'HDRN' ? side.totals.hdrnMintable : side.totals.comReady;
+      const balUsd = price.usd == null ? null : (Number(bal) / 10 ** cfg.decimals) * price.usd;
+      rows.push(`<tr>
+        <td><span class="tok-dot" style="background:${cfg.accent}"></span> ${esc(cfg.symbol)}</td>
+        <td><span class="chain-tag">${esc(CHAINS[id].short)}</span></td>
+        <td class="mono">${fmtPrice(price.usd)}</td>
+        <td class="mono">${fmtSide(bal, cfg.key)}${balUsd != null ? ` <span class="usd">${fmtUsd(balUsd)}</span>` : ''}</td>
+        <td class="mono ${mintable > 0n ? 'good' : 'muted'}">${mintable > 0n ? fmtSide(mintable, cfg.key) : '—'}</td>
+        <td class="mono muted">${price.liquidityUsd == null ? '—' : fmtUsd(price.liquidityUsd)}</td>
+      </tr>`);
+    }
+  }
+
+  // Communis lets you stake COM back into itself against the debt an end-bonus mint creates.
+  const staking = live.flatMap((id) =>
+    (state.snapshots[id].side.comStaking || [])
+      .filter((c) => c.staked > 0n || c.payoutDebt > 0n)
+      .map((c) => ({ ...c, chainId: id }))
+  );
+
+  el.innerHTML = `
+    <div class="section-head" style="margin-bottom:14px">
+      <h2>Side stakes · both chains</h2>
+      <span class="muted small">Hedron and Communis mint against the same HEX stakes</span>
+    </div>
+    <div class="card">
+      <div class="table-scroll">
+        <table class="data">
+          <thead><tr><th>Token</th><th>Chain</th><th>Price</th><th>Your balance</th><th>Mintable now</th><th>Pool</th></tr></thead>
+          <tbody>${rows.join('')}</tbody>
+        </table>
+      </div>
+      ${
+        staking.length
+          ? `<div class="table-scroll" style="margin-top:16px">
+              <table class="data">
+                <thead><tr><th>Staked COM</th><th>Chain</th><th>Amount</th><th>End-bonus debt</th><th>Next payout</th><th>Due now</th></tr></thead>
+                <tbody>${staking
+                  .map(
+                    (c) => `<tr>
+                    <td class="mono muted">${esc(labelFor(c.address))}</td>
+                    <td><span class="chain-tag">${esc(CHAINS[c.chainId].short)}</span></td>
+                    <td class="mono">${fmtSide(c.staked, 'COM')}</td>
+                    <td class="mono ${c.debtCovered ? '' : 'bad'}">${fmtSide(c.payoutDebt, 'COM')}${
+                      c.debtCovered ? '' : ' <span class="mint-flag bad">not covered — payouts frozen</span>'
+                    }</td>
+                    <td class="mono muted">${c.nextPayoutDay > 0n ? `HEX day ${c.nextPayoutDay}` : '—'}</td>
+                    <td class="mono ${c.bonusDue > 0n ? 'good' : 'muted'}">${c.bonusDue > 0n ? fmtSide(c.bonusDue, 'COM') : '—'}</td>
+                  </tr>`
+                  )
+                  .join('')}</tbody>
+              </table>
+             </div>`
+          : ''
+      }
+      <p class="muted small" style="margin:14px 0 0">
+        Both contracts sit at the same address on Ethereum and PulseChain — deployed before the
+        fork, so the bytecode is identical either side while the supplies have diverged since.
+        Hedron pays by the day and never expires; Communis pays a start bonus that shrinks as
+        HEX's share rate rises, and an end bonus that is gone 37 days after a stake matures.
+      </p>
+      ${errored
+        .map((id) => `<p class="bad small">${esc(CHAINS[id].name)}: ${esc(state.snapshots[id].side.error)}</p>`)
+        .join('')}
+    </div>`;
 }
 
 function renderProtocol() {

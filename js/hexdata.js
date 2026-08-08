@@ -17,6 +17,7 @@ import { HEX_ADDRESS, CHAINS, rpcsFor } from './config.js';
 import { Rpc, mc } from './rpc.js';
 import { unpackDailyData, decodeGlobalInfo, deriveStake, BIG_PAY_DAY } from './hexmath.js';
 import { loadPulseTokens, TOKENS_CHAIN_ID } from './tokens.js';
+import { loadSideStakes, attachHsiEntries } from './sidestakes.js';
 
 const CACHE_PREFIX = 'hexminer.dailydata.v1.';
 const DAYS_PER_CALL = 500;
@@ -249,8 +250,10 @@ export async function loadChainSnapshot(chainId, addresses, settings, onProgress
     }
   }
 
-  // Derive.
-  const stakes = [];
+  // Derive the wallet's own stakes. These stay separate from HSI stakes below, because
+  // HexRewards and Savant address a stake by its index in the caller's own stakeLists —
+  // a numbering an HSI stake simply is not part of.
+  const nativeStakes = [];
   stakeResults.forEach((r, i) => {
     if (!r.success) return;
     const meta = stakeCalls[i];
@@ -258,21 +261,48 @@ export async function loadChainSnapshot(chainId, addresses, settings, onProgress
     if (raw.stakeId === 0n) return; // defensive: not a live entry
     const d = deriveStake(globals, dd, raw, meta.index);
     d.owner = meta.owner;
-    stakes.push(d);
+    nativeStakes.push(d);
   });
 
-  const totals = summarise(wallets, stakes, price.hexUsd);
+  // Hedron and Communis mint against these same stakes on BOTH chains, and Hedron also
+  // covers HSI stakes — HEX stakes held by their own contracts, which never appear in a
+  // wallet's stakeLists and so would otherwise be invisible here.
+  let side = null;
+  let hsiStakes = [];
+  try {
+    onProgress?.('reading Hedron and Communis');
+    side = await loadSideStakes(rpc, chainId, block, addresses, nativeStakes, globals, price.hexUsd, onProgress);
+
+    hsiStakes = side.hsiStakes.map((h) => {
+      const d = deriveStake(globals, dd, h.raw, 0);
+      d.owner = h.owner;
+      d.isHsi = true;
+      d.hsiAddress = h.hsiAddress;
+      d.tokenized = h.tokenized;
+      // Identified by HSI address rather than a list position, so it can never be
+      // mistaken for — or collide with — a native stake index.
+      d.index = `hsi-${h.hsiAddress.slice(2, 10)}`;
+      return d;
+    });
+    attachHsiEntries(side, hsiStakes, globals);
+  } catch (e) {
+    side = { error: e.message || String(e) };
+  }
 
   // PulseChain also hosts the secondary DApps that mint against these same stakes.
+  // Native stakes only: both address their claim slots through the caller's stakeLists.
   let tokens = null;
   if (chainId === TOKENS_CHAIN_ID && price.nativeUsd) {
     onProgress?.('reading HexRewards, Savant and JDAI');
     try {
-      tokens = await loadPulseTokens(rpc, block, addresses, stakes, price.nativeUsd);
+      tokens = await loadPulseTokens(rpc, block, addresses, nativeStakes, price.nativeUsd);
     } catch (e) {
       tokens = { error: e.message || String(e) };
     }
   }
+
+  const stakes = [...nativeStakes, ...hsiStakes];
+  const totals = summarise(wallets, stakes, price.hexUsd);
 
   return {
     chain,
@@ -281,8 +311,11 @@ export async function loadChainSnapshot(chainId, addresses, settings, onProgress
     price,
     wallets,
     stakes,
+    nativeStakes,
+    hsiStakes,
     totals,
     tokens,
+    side,
     dailyData: dd,
     block: BigInt(block),
     rpcUrl: rpc.activeUrl,

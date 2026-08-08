@@ -108,6 +108,67 @@ The full-term bonus is worth a lot — a 5555-day stake mints 0.2777 HXR at half
   `stakeGoodAccounting()` first. That keeps the stake in `stakeLists` (unlike `stakeEnd`) and,
   on a late stake, freezes the late-end penalty. Skip it and you get 1/10th of the reward.
 
+### Hedron and Communis
+
+Two stake-minting contracts this project did not author. Unlike HexRewards and Savant they live
+on **both** chains, at the same addresses — deployed before the fork, so the bytecode is
+identical either side (checked by codehash) while the supplies have diverged since.
+
+| | address (both chains) | decimals |
+|---|---|---|
+| Hedron | `0x3819f64f282bf135d62168C1e513280dAF905e06` | 9 |
+| Communis | `0x5A9780Bfe63f3ec57f01b087cD65BD656C9034A8` | 12 |
+| HSI Manager | `0x8BD3d1472A656e312E94fB1BbdD599B8C51D18e3` | — |
+
+**Hedron** is not a one-shot claim. It pays `stakeShares × days served since the last mint`, so
+the mintable amount grows every day and is never used up — nothing is lost by waiting, only by
+ending the stake. Two bonuses compound on top, each `payout × multiplier / 10`: a launch-phase
+bonus fixed on the share at first mint, and a loan-to-mint multiplier that has been zero on
+every Hedron day so far on both chains. Mint records are keyed by stake ID, so the index
+collision that afflicts HexRewards cannot happen here.
+
+**Communis** pays three separate bonuses, all keyed by stake ID:
+
+- **start bonus** — available from the stake's start day, but scaled by the stake's original
+  share rate over the current global share rate. HEX's share rate only rises, so this shrinks
+  every day you wait.
+- **end bonus** — the largest of the three, and the only hard deadline in this app: it opens
+  when the term ends and is **gone 37 days later**, permanently, for everyone.
+- **good accounting bonus** — 1% of the stake's max payout, paid to *whoever* calls it once
+  that 37-day window has passed and the stake is still locked. Anyone can take it, and doing so
+  runs HEX `stakeGoodAccounting()` on the stake as a side effect. The app flags your own stakes
+  that are exposed to this.
+
+Communis also lets COM be staked back into itself against the debt an end-bonus mint creates;
+staked amount, debt cover and the 91-day payout schedule are all shown.
+
+### HSI stakes
+
+Hedron also mints against **HSI** stakes — HEX stakes wrapped in their own contract and held by
+the HSI Manager. These are real HEX stakes that never appear in a wallet's own `stakeLists`, so
+before this they were invisible here. Both kinds are now loaded and folded into the portfolio:
+detokenized ones from the manager's list, and tokenized ones through its ERC-721 enumeration. A
+tokenized HSI has to be detokenized before Hedron will mint against it, which the app says on
+the card.
+
+Communis is deliberately absent on HSI stakes: every one of its mint functions reads
+`HEX.stakeLists(msg.sender, …)`, and an HSI's stake belongs to the HSI contract rather than to
+the wallet, so a holder can never claim one.
+
+### Verifying the two of them
+
+Communis exposes `getPayout` and `getStartBonusPayout` as `pure`, so the transcription was
+checked against the deployed contract itself over 312 realistic stakes — share rates 100k–421k,
+principals from 1,000 HEX to 500M, terms 180–5,555 days, covering all three bonus-percentage
+branches and both the same-day and share-rate-penalised cases. **1,992 values compared, zero
+mismatches.**
+
+Hedron has no equivalent view, so the reference is its own history: **105 real Mint events
+across 30 stakes, zero mismatches**, covering first mints, incremental mints, and launch bonuses
+of 0, 90 and 100. The loan-to-mint multiplier could not be exercised because it has never fired —
+scanning all 1,625 Hedron days on both chains found it zero everywhere, with loaned supply at
+0.00008% of minted against a 50% threshold. It is implemented faithfully regardless.
+
 ### The HexRewards index bug
 
 `HexRewards` records claims as `claimed[user][stakeIndex]`; `Savant` fixed this to
@@ -293,6 +354,7 @@ js/
   rpc.js          JSON-RPC failover + Multicall3 batching
   abi.js          minimal ABI codec, hardcoded selectors
   config.js       chains, addresses, settings store
+  sidestakes.js   Hedron / Communis mint math, HSI stakes — both chains
   urlview.js      address-in-the-URL parsing, banner and nav propagation
   charts.js       SVG line charts with hover
   format.js       display formatting
